@@ -1,0 +1,6 @@
+name: PlayitGG
+version: 0.1.0
+main: gg.playit.minecraft.PlayitBukkit
+softdepend:
+  - ProtocolLib
+  - floodgate
