@@ -1,40 +1,31 @@
 package gg.playit.minecraft;
 
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.IOException;
+import java.util.logging.Logger;
 
 public final class PlayitBukkit extends JavaPlugin {
+    static Logger log = Logger.getLogger(ReflectionHelper.class.getName());
+
     private PlayitManager control;
     PlayitConnectionTracker tracker = new PlayitConnectionTracker();
-    RealIpInjector realIpInjector;
 
     @Override
     public void onEnable() {
-        var secret = "<>";
+        getConfig().addDefault("agent-secret", "");
+        saveDefaultConfig();
 
-//        if (secret == null) {
-//            throw new RuntimeException("playit-secret not set");
-//        }
-
-        if (control == null) {
-            control = new PlayitManager(secret, tracker);
+        var secretKey = getConfig().getString("agent-secret");
+        if (secretKey == null || secretKey.length() == 0) {
+            log.warning("secret key not set");
+            return;
         }
 
-        realIpInjector = new RealIpInjector(player -> {
-            var currentAddress = player.player.getAddress();
-            if (currentAddress == null) {
-                return;
-            }
-
-            if (!currentAddress.getAddress().isLoopbackAddress()) {
-                return;
-            }
-
-            var trueIp = tracker.getTrueIp(currentAddress.getPort());
-            System.out.println("got new client, true ip: " + trueIp);
-//            trueIp.ifPresent(player::setIp);
-        }, this);
+        if (control == null) {
+            control = new PlayitManager(secretKey, tracker, Bukkit.getServer());
+        }
 
         new Thread(control).start();
     }
@@ -43,13 +34,6 @@ public final class PlayitBukkit extends JavaPlugin {
     public void onDisable() {
         if (control != null) {
             control.shutdown();
-        }
-
-        if (realIpInjector != null) {
-            try {
-                realIpInjector.close();
-            } catch (IOException ignore) {
-            }
         }
     }
 }

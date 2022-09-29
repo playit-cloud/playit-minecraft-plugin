@@ -5,6 +5,7 @@ import gg.playit.messages.ControlFeedReader;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import org.bukkit.Bukkit;
+import org.bukkit.Server;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -16,9 +17,12 @@ public class PlayitManager implements Runnable {
     private final AtomicInteger state = new AtomicInteger(0);
     private final PlayitConnectionTracker tracker;
 
-    public PlayitManager(String secretKey, PlayitConnectionTracker tracker) {
+    private final Server server;
+
+    public PlayitManager(String secretKey, PlayitConnectionTracker tracker, Server server) {
         this.tracker = tracker;
         this.secretKey = secretKey;
+        this.server = server;
     }
 
     private static final int STATE_OFFLINE = 0;
@@ -57,7 +61,8 @@ public class PlayitManager implements Runnable {
                                     key,
                                     new InetSocketAddress(Bukkit.getIp(), Bukkit.getPort()),
                                     new InetSocketAddress(ipString(newClient.claimAddress.ipBytes), Short.toUnsignedInt(newClient.claimAddress.portNumber)),
-                                    newClient.claimToken
+                                    newClient.claimToken,
+                                    server
                             ).start();
                         }
                     }
