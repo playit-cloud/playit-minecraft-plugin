@@ -7,10 +7,8 @@ import io.netty.channel.*;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.timeout.ReadTimeoutHandler;
-import org.bukkit.Bukkit;
 import org.bukkit.Server;
 
-import java.lang.reflect.Constructor;
 import java.net.InetSocketAddress;
 import java.util.logging.Logger;
 
@@ -26,7 +24,19 @@ public class PlayitTcpTunnel {
     private final byte[] tunnelClaimToken;
     private final Server server;
 
-    public PlayitTcpTunnel(InetSocketAddress trueIp, EventLoopGroup group, PlayitConnectionTracker tracker, String connectionKey, InetSocketAddress minecraftServerAddress, InetSocketAddress tunnelClaimAddress, byte[] tunnelClaimToken, Server server) {
+    private final int connectionTimeoutSeconds;
+
+    public PlayitTcpTunnel(
+            InetSocketAddress trueIp,
+            EventLoopGroup group,
+            PlayitConnectionTracker tracker,
+            String connectionKey,
+            InetSocketAddress minecraftServerAddress,
+            InetSocketAddress tunnelClaimAddress,
+            byte[] tunnelClaimToken,
+            Server server,
+            int connectionTimeoutSeconds
+    ) {
         this.trueIp = trueIp;
         this.group = group;
         this.tracker = tracker;
@@ -35,6 +45,7 @@ public class PlayitTcpTunnel {
         this.tunnelClaimAddress = tunnelClaimAddress;
         this.tunnelClaimToken = tunnelClaimToken;
         this.server = server;
+        this.connectionTimeoutSeconds = connectionTimeoutSeconds;
     }
 
     private Channel minecraftChannel;
@@ -74,19 +85,7 @@ public class PlayitTcpTunnel {
     }
 
     private void disconnected() {
-        this.tracker.removeConnection(connectionKey, localPort());
-    }
-
-    private Integer localPort() {
-        if (minecraftChannel == null) {
-            return null;
-        }
-        var addr = minecraftChannel.localAddress();
-        if (addr instanceof InetSocketAddress address) {
-            return address.getPort();
-        }
-
-        return null;
+        this.tracker.removeConnection(connectionKey);
     }
 
     @ChannelHandler.Sharable
@@ -127,10 +126,6 @@ public class PlayitTcpTunnel {
                 minecraftClient.handler(new ChannelInitializer<SocketChannel>() {
                     protected void initChannel(SocketChannel socketChannel) {
                         minecraftChannel = socketChannel;
-                        var port = localPort();
-                        if (port != null) {
-                            tracker.addTrueIp(port, trueIp);
-                        }
                         socketChannel.pipeline().addLast(new MinecraftConnectionHandler());
                     }
                 });
@@ -263,7 +258,7 @@ public class PlayitTcpTunnel {
 
             var channel = tunnelChannel.pipeline().removeLast();
             tunnelChannel.pipeline()
-                    .addLast("timeout", new ReadTimeoutHandler(30))
+                    .addLast("timeout", new ReadTimeoutHandler(connectionTimeoutSeconds))
                     .addLast("legacy_query", (ChannelHandler) legacyPingHandler)
                     .addLast("splitter", (ChannelHandler) packetSplitter)
                     .addLast("decoder", (ChannelHandler) packetDecoder)

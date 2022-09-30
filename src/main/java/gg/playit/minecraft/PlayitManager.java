@@ -11,95 +11,104 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Logger;
 
 public class PlayitManager implements Runnable {
+    static Logger log = Logger.getLogger(PlayitManager.class.getName());
+
     private final String secretKey;
     private final AtomicInteger state = new AtomicInteger(0);
-    private final PlayitConnectionTracker tracker;
+    private final PlayitConnectionTracker tracker = new PlayitConnectionTracker();
+
+    private final EventLoopGroup group;
 
     private final Server server;
 
-    public PlayitManager(String secretKey, PlayitConnectionTracker tracker, Server server) {
-        this.tracker = tracker;
+    public PlayitManager(String secretKey, Server server, EventLoopGroup group) {
         this.secretKey = secretKey;
         this.server = server;
+        this.group = group;
     }
 
-    private static final int STATE_OFFLINE = 0;
-    private static final int STATE_ONLINE = 1;
-    private static final int STATE_SHUTDOWN = 2;
+    public volatile int connectionTimeoutSeconds = 30;
 
-    private final EventLoopGroup group = new NioEventLoopGroup();
+    public static final int STATE_OFFLINE = 0;
+    public static final int STATE_CONNECTING = 1;
+    public static final int STATE_ONLINE = 2;
+    public static final int STATE_ERROR_WAITING = 3;
+    public static final int STATE_SHUTDOWN = 4;
+    public static final int STATE_INVALID_AUTH = 5;
 
     public void shutdown() {
         state.compareAndSet(STATE_ONLINE, STATE_SHUTDOWN);
     }
 
+    public int state() {
+        return state.get();
+    }
+
     @Override
     public void run() {
-        if (!state.compareAndSet(STATE_OFFLINE, STATE_ONLINE)) {
+        if (!state.compareAndSet(STATE_OFFLINE, STATE_CONNECTING)) {
             return;
         }
 
-        try (PlayitControlChannel channel = PlayitControlChannel.setup(secretKey)) {
-            while (state.get() == STATE_ONLINE) {
-                var messageOpt = channel.update();
-                if (messageOpt.isPresent()) {
-                    var feedMessage = messageOpt.get();
+        while (state.get() == STATE_CONNECTING) {
+            try (PlayitControlChannel channel = PlayitControlChannel.setup(secretKey)) {
+                state.compareAndSet(STATE_CONNECTING, STATE_ONLINE);
 
-                    if (feedMessage instanceof ControlFeedReader.NewClient newClient) {
-                        System.out.println("Got new client " + feedMessage);
+                while (state.get() == STATE_ONLINE) {
+                    var messageOpt = channel.update();
+                    if (messageOpt.isPresent()) {
+                        var feedMessage = messageOpt.get();
 
-                        var key = newClient.peerAddr + "-" + newClient.connectAddr;
-                        if (tracker.addConnection(key)) {
-                            System.out.println("Start TCP connection to MC server");
+                        if (feedMessage instanceof ControlFeedReader.NewClient newClient) {
+                            log.info("got new client: " + feedMessage);
 
-                            new PlayitTcpTunnel(
-                                    new InetSocketAddress(InetAddress.getByAddress(newClient.peerAddr.ipBytes), Short.toUnsignedInt(newClient.peerAddr.portNumber)),
-                                    group,
-                                    tracker,
-                                    key,
-                                    new InetSocketAddress(Bukkit.getIp(), Bukkit.getPort()),
-                                    new InetSocketAddress(ipString(newClient.claimAddress.ipBytes), Short.toUnsignedInt(newClient.claimAddress.portNumber)),
-                                    newClient.claimToken,
-                                    server
-                            ).start();
+                            var key = newClient.peerAddr + "-" + newClient.connectAddr;
+                            if (tracker.addConnection(key)) {
+                                log.info("starting tcp tunnel for client");
+
+                                new PlayitTcpTunnel(
+                                        new InetSocketAddress(InetAddress.getByAddress(newClient.peerAddr.ipBytes), Short.toUnsignedInt(newClient.peerAddr.portNumber)),
+                                        group,
+                                        tracker,
+                                        key,
+                                        new InetSocketAddress(Bukkit.getIp(), Bukkit.getPort()),
+                                        new InetSocketAddress(InetAddress.getByAddress(newClient.claimAddress.ipBytes), Short.toUnsignedInt(newClient.claimAddress.portNumber)),
+                                        newClient.claimToken,
+                                        server,
+                                        connectionTimeoutSeconds
+                                ).start();
+                            }
                         }
                     }
                 }
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        } finally {
-            state.set(STATE_OFFLINE);
-        }
-    }
+            } catch (IOException e) {
+                state.compareAndSet(STATE_ONLINE, STATE_ERROR_WAITING);
+                log.severe("failed when communicating with tunnel server, error: " + e);
 
-    private static String ipString(byte[] ipBytes) {
-        if (ipBytes.length == 4) {
-            return String.format(
-                    "%s.%s.%s.%s",
-                    Byte.toUnsignedInt(ipBytes[0]), Byte.toUnsignedInt(ipBytes[1]),
-                    Byte.toUnsignedInt(ipBytes[2]), Byte.toUnsignedInt(ipBytes[3])
-            );
-        }
-
-        if (ipBytes.length == 16) {
-            var sb = new StringBuilder();
-
-            for (var i = 0; i < 16; ++i) {
-                var b = ipBytes[i];
-
-                if ((i % 2) == 0 && i != 0) {
-                    sb.append(':');
+                if (e.getMessage().contains("invalid authentication")) {
+                    state.set(STATE_INVALID_AUTH);
                 }
 
-                sb.append(String.format("%02x", b));
+                try {
+                    Thread.sleep(5_000);
+                } catch (InterruptedException ignore) {
+                }
+            } finally {
+                if (state.compareAndSet(STATE_SHUTDOWN, STATE_OFFLINE)) {
+                    log.info("control channel shutdown");
+                } else if (state.compareAndSet(STATE_ERROR_WAITING, STATE_CONNECTING)) {
+                    log.info("trying to connect again");
+                } else if (state.compareAndSet(STATE_ONLINE, STATE_CONNECTING)) {
+                    log.warning("unexpected state ONLINE, moving to CONNECTING");
+                } if (state.get() == STATE_CONNECTING) {
+                    log.info("failed to connect, retrying");
+                } if (state.get() == STATE_INVALID_AUTH) {
+                    log.info("invalid auth, done trying");
+                }
             }
-
-            return sb.toString();
         }
-
-        throw new RuntimeException("invalid ip length: " + ipBytes.length);
     }
 }
