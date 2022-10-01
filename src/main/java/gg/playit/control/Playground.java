@@ -7,8 +7,8 @@ import java.io.IOException;
 public class Playground {
     public static void main(String[] args) throws IOException {
         var api = new ApiClient("");
-        var tunnels = api.listTunnels();
-        System.out.println(tunnels);
+        var res = api.getStatus();
+        System.out.println(res);
 
 //        try () {
 

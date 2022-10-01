@@ -1,13 +1,8 @@
 package gg.playit.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import gg.playit.api.actions.Action;
-import gg.playit.api.actions.CreateTunnel;
-import gg.playit.api.actions.ListFromAccount;
-import gg.playit.api.actions.SignAgentRegister;
-import gg.playit.api.models.AccountTunnels;
-import gg.playit.api.models.Created;
-import gg.playit.api.models.SignedData;
+import gg.playit.api.actions.*;
+import gg.playit.api.models.*;
 import org.apache.commons.codec.DecoderException;
 
 import java.io.IOException;
@@ -41,14 +36,38 @@ public class ApiClient {
         return execute(create, Created.class);
     }
 
+    public String exchangeClaimForSecret(String claim) {
+        try {
+            var req = new ExchangeClaimForSecret();
+            req.claimKey = claim;
+            var res = execute(req, AgentSecret.class);
+            return res.secretKey;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    public SessionStatus getStatus() throws IOException {
+        return execute(new GetStatus(), SessionStatus.class);
+    }
+
+    public String createGuestWebSessionKey() throws IOException {
+        return execute(new CreateGuestSession(), WebSession.class).sessionKey;
+    }
+
     private <T> T execute(Action action, Class<T> responseType) throws IOException {
         var requestBody = mapper.writeValueAsString(action);
 
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(API_URL + action.getPath()))
-                .header("Authorization", String.format("agent-key %s", this.secret))
                 .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
+                .header("Accept", "application/json");
+
+        if (secret != null) {
+            builder = builder.header("Authorization", String.format("agent-key %s", this.secret));
+        }
+
+        HttpRequest request = builder
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
@@ -57,13 +76,7 @@ public class ApiClient {
             var responseBody = response.body();
 
             if (response.statusCode() != 200) {
-                throw new IOException("Got API error, request: "
-                        + action.getPath() + ", "
-                        + action.getType() + ": "
-                        + response.statusCode()
-                        + ", req body: " + requestBody
-                        + ", res body: " + responseBody
-                );
+                throw new ApiError(response.statusCode(), requestBody, responseBody);
             }
 
             return mapper.readValue(responseBody, responseType);

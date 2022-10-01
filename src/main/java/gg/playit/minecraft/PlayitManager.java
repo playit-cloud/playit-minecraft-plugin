@@ -1,11 +1,9 @@
 package gg.playit.minecraft;
 
+import gg.playit.api.ApiClient;
 import gg.playit.control.PlayitControlChannel;
 import gg.playit.messages.ControlFeedReader;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 import org.bukkit.Bukkit;
-import org.bukkit.Server;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -15,29 +13,33 @@ import java.util.logging.Logger;
 
 public class PlayitManager implements Runnable {
     static Logger log = Logger.getLogger(PlayitManager.class.getName());
-
-    private final String secretKey;
-    private final AtomicInteger state = new AtomicInteger(0);
+    private final AtomicInteger state = new AtomicInteger(STATE_INIT);
     private final PlayitConnectionTracker tracker = new PlayitConnectionTracker();
 
-    private final EventLoopGroup group;
+    private final PlayitBukkit plugin;
 
-    private final Server server;
+    public PlayitManager(PlayitBukkit plugin) {
+        this.plugin = plugin;
 
-    public PlayitManager(String secretKey, Server server, EventLoopGroup group) {
-        this.secretKey = secretKey;
-        this.server = server;
-        this.group = group;
+        var secret = plugin.getConfig().getString(PlayitBukkit.CFG_AGENT_SECRET_KEY);
+        if (secret != null && secret.length() < 32) {
+            secret = null;
+        }
+
+        setup = new PlayitKeysSetup(secret, state);
     }
 
-    public volatile int connectionTimeoutSeconds = 30;
+    private final PlayitKeysSetup setup;
+    private PlayitKeysSetup.PlayitKeys keys;
 
-    public static final int STATE_OFFLINE = 0;
-    public static final int STATE_CONNECTING = 1;
-    public static final int STATE_ONLINE = 2;
-    public static final int STATE_ERROR_WAITING = 3;
-    public static final int STATE_SHUTDOWN = 4;
-    public static final int STATE_INVALID_AUTH = 5;
+    public volatile int connectionTimeoutSeconds = 30;
+    public static final int STATE_INIT = -1;
+    public static final int STATE_OFFLINE = 10;
+    public static final int STATE_CONNECTING = 11;
+    public static final int STATE_ONLINE = 12;
+    public static final int STATE_ERROR_WAITING = 13;
+    public static final int STATE_SHUTDOWN = 0;
+    public static final int STATE_INVALID_AUTH = 15;
 
     public void shutdown() {
         state.compareAndSet(STATE_ONLINE, STATE_SHUTDOWN);
@@ -49,12 +51,90 @@ public class PlayitManager implements Runnable {
 
     @Override
     public void run() {
-        if (!state.compareAndSet(STATE_OFFLINE, STATE_CONNECTING)) {
+        /* make sure we don't run two instances */
+        if (!state.compareAndSet(STATE_INIT, PlayitKeysSetup.STATE_INIT)) {
             return;
         }
 
+        while (state.get() != STATE_SHUTDOWN) {
+            try {
+                keys = setup.progress();
+
+                if (keys != null) {
+                    log.info("keys and tunnel setup");
+                    break;
+                }
+            } catch (IOException e) {
+                log.severe("got error during setup: " + e);
+
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException ignore) {
+                }
+
+                continue;
+            }
+
+            if (state.get() == PlayitKeysSetup.STATE_MISSING_SECRET) {
+                for (var player : plugin.server.getOnlinePlayers()) {
+                    if (player.isOp()) {
+                        player.sendMessage("Visit https://playit.gg/mc/" + setup.getClaimCode() + " to setup playit");
+                    } else {
+                        player.sendMessage("Check server logs to get playit.gg claim link to setup tunnel (or be a Server Operator)");
+                    }
+                }
+
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException ignore) {
+                }
+            }
+        }
+
+        if (keys == null) {
+            log.info("shutdown reached, tunnel connection never started");
+            return;
+        }
+
+        if (keys.isGuest) {
+            plugin.server.broadcastMessage("WARNING: playit.gg plugin is running with a guest account");
+            plugin.server.broadcastMessage("see server console for setup URL");
+
+            var api = new ApiClient(keys.secretKey);
+
+            try {
+                var key = api.createGuestWebSessionKey();
+                var url = "https://playit.gg/login/guest-account/" + key;
+                log.info("setup playit.gg account: " + url);
+
+                if (state.get() == STATE_SHUTDOWN) {
+                    return;
+                }
+
+                for (var player : plugin.server.getOnlinePlayers()) {
+                    if (player.isOp()) {
+                        player.sendMessage("setup playit.gg account");
+                        player.sendMessage("URL: " + url);
+                    }
+                }
+            } catch (IOException e) {
+                log.severe("failed to generate web session key: " + e);
+            }
+        } else if (keys.isEmailVerified) {
+            plugin.server.broadcastMessage("WARNING: email associated with playit.gg account is not verified");
+        }
+
+        plugin.server.broadcastMessage("playit.gg tunnel address");
+        plugin.server.broadcastMessage("ADDR: " + keys.tunnelAddress);
+
+        if (state.get() == STATE_SHUTDOWN) {
+            return;
+        }
+
+        state.set(STATE_CONNECTING);
+
         while (state.get() == STATE_CONNECTING) {
-            try (PlayitControlChannel channel = PlayitControlChannel.setup(secretKey)) {
+            try (PlayitControlChannel channel = PlayitControlChannel.setup(keys.secretKey)) {
                 state.compareAndSet(STATE_CONNECTING, STATE_ONLINE);
 
                 while (state.get() == STATE_ONLINE) {
@@ -71,13 +151,13 @@ public class PlayitManager implements Runnable {
 
                                 new PlayitTcpTunnel(
                                         new InetSocketAddress(InetAddress.getByAddress(newClient.peerAddr.ipBytes), Short.toUnsignedInt(newClient.peerAddr.portNumber)),
-                                        group,
+                                        plugin.eventGroup,
                                         tracker,
                                         key,
                                         new InetSocketAddress(Bukkit.getIp(), Bukkit.getPort()),
                                         new InetSocketAddress(InetAddress.getByAddress(newClient.claimAddress.ipBytes), Short.toUnsignedInt(newClient.claimAddress.portNumber)),
                                         newClient.claimToken,
-                                        server,
+                                        plugin.server,
                                         connectionTimeoutSeconds
                                 ).start();
                             }
@@ -103,9 +183,11 @@ public class PlayitManager implements Runnable {
                     log.info("trying to connect again");
                 } else if (state.compareAndSet(STATE_ONLINE, STATE_CONNECTING)) {
                     log.warning("unexpected state ONLINE, moving to CONNECTING");
-                } if (state.get() == STATE_CONNECTING) {
+                }
+                if (state.get() == STATE_CONNECTING) {
                     log.info("failed to connect, retrying");
-                } if (state.get() == STATE_INVALID_AUTH) {
+                }
+                if (state.get() == STATE_INVALID_AUTH) {
                     log.info("invalid auth, done trying");
                 }
             }

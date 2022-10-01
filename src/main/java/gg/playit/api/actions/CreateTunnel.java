@@ -17,7 +17,7 @@ public class CreateTunnel implements Action {
     public int portCount;
 
     @JsonProperty("local_ip")
-    public InetAddress localIp;
+    public String localIp;
 
     @JsonProperty("local_port")
     public Integer localPort;
