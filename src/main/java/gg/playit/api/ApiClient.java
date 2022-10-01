@@ -12,8 +12,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 public class ApiClient {
-    //    private static final String API_URL = "https://api.playit.cloud";
-    private static final String API_URL = "http://localhost:8080";
+        private static final String API_URL = "https://api.playit.cloud";
+//    private static final String API_URL = "http://localhost:8080";
 
     private final HttpClient client;
     private final String secret;

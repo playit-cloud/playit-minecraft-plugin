@@ -96,6 +96,9 @@ public class PlayitManager implements Runnable {
             return;
         }
 
+        plugin.getConfig().set(PlayitBukkit.CFG_AGENT_SECRET_KEY, keys.secretKey);
+        plugin.saveConfig();
+
         if (keys.isGuest) {
             plugin.server.broadcastMessage("WARNING: playit.gg plugin is running with a guest account");
             plugin.server.broadcastMessage("see server console for setup URL");

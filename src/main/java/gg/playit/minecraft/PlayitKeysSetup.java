@@ -90,7 +90,7 @@ public class PlayitKeysSetup {
                     state.compareAndSet(STATE_CHECKING_SECRET, STATE_CREATING_TUNNEL);
                     return null;
                 } catch (ApiError e) {
-                    if (e.statusCode == 401) {
+                    if (e.statusCode == 401 || e.statusCode == 400) {
                         if (claimCode == null) {
                             log.info("secret key invalid, starting over");
                             state.compareAndSet(STATE_CHECKING_SECRET, STATE_MISSING_SECRET);
