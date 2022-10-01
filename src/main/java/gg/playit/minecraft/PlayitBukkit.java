@@ -1,16 +1,25 @@
 package gg.playit.minecraft;
 
+import gg.playit.api.ApiClient;
+import gg.playit.api.ApiError;
+import gg.playit.api.models.Notice;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Server;
 import org.bukkit.command.*;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.logging.Logger;
 
-public final class PlayitBukkit extends JavaPlugin {
+public final class PlayitBukkit extends JavaPlugin implements Listener {
     public static final String CFG_AGENT_SECRET_KEY = "agent-secret";
     public static final String CFG_CONNECTION_TIMEOUT_SECONDS = "mc-timeout-sec";
 
@@ -38,7 +47,37 @@ public final class PlayitBukkit extends JavaPlugin {
         saveDefaultConfig();
 
         var secretKey = getConfig().getString("agent-secret");
-        setSecret(secretKey);
+        resetConnection(secretKey);
+
+        try {
+            PluginManager pm = Bukkit.getServer().getPluginManager();
+            pm.registerEvents(this, this);
+        } catch (Exception e) {
+        }
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        var player = event.getPlayer();
+        var manager = playitManager;
+
+        if (player.isOp()) {
+            if (manager.isGuest()) {
+                player.sendMessage(ChatColor.RED + "WARNING:" + ChatColor.RESET + " playit.gg is running with a guest account");
+            } else if (manager.emailVerified()) {
+                player.sendMessage(ChatColor.RED + "WARNING:" + ChatColor.RESET + " your email on playit.gg is not verified");
+            }
+
+            Notice notice = manager.getNotice();
+            if (notice != null) {
+                player.sendMessage(ChatColor.RED + "NOTICE:" + ChatColor.RESET + " " + notice.message);
+                player.sendMessage(ChatColor.RED + "URL:" + ChatColor.RESET + " " + notice.url);
+            }
+        }
+    }
+
+    public void broadcast(String message) {
+        Bukkit.broadcastMessage(ChatColor.BOLD + "" + ChatColor.UNDERLINE + "playit.gg:" + ChatColor.RESET + " " + message);
     }
 
     @Override
@@ -60,31 +99,38 @@ public final class PlayitBukkit extends JavaPlugin {
                         sender.sendMessage("playit status: offline (or shutting down)");
                     }
                 } else {
-                    switch (manager.state()) {
-                        case PlayitManager.STATE_CONNECTING -> sender.sendMessage("playit status: connecting");
-                        case PlayitManager.STATE_ONLINE -> sender.sendMessage("playit status: connected");
-                        case PlayitManager.STATE_SHUTDOWN -> sender.sendMessage("playit status: shutting down");
-                        case PlayitManager.STATE_OFFLINE -> sender.sendMessage("playit status: offline");
-                        case PlayitManager.STATE_ERROR_WAITING ->
-                                sender.sendMessage("playit status: got error, retrying");
-                        case PlayitManager.STATE_INVALID_AUTH ->
-                                sender.sendMessage("playit status: invalid secret key");
-                        default -> sender.sendMessage("playit status: unknown");
-                    }
+                    String message = switch (manager.state()) {
+                        case PlayitKeysSetup.STATE_INIT -> "preparing secret";
+                        case PlayitKeysSetup.STATE_MISSING_SECRET -> "waiting for claim";
+                        case PlayitKeysSetup.STATE_CHECKING_SECRET -> "checking secret";
+                        case PlayitKeysSetup.STATE_CREATING_TUNNEL -> "preparing tunnel";
+                        case PlayitKeysSetup.STATE_ERROR -> "error setting up key / tunnel";
+
+                        case PlayitManager.STATE_CONNECTING -> "connecting";
+                        case PlayitManager.STATE_ONLINE -> "connected";
+                        case PlayitManager.STATE_OFFLINE -> "offline";
+                        case PlayitManager.STATE_ERROR_WAITING -> "got error, retrying";
+                        case PlayitManager.STATE_INVALID_AUTH -> "invalid secret key";
+
+                        case PlayitManager.STATE_SHUTDOWN -> "shutdown";
+                        default -> "unknown";
+                    };
+
+                    sender.sendMessage(ChatColor.BLUE + "" + ChatColor.UNDERLINE + "playit status:" + ChatColor.RESET + " " + message);
                 }
 
                 return true;
             }
 
             if (args.length > 1 && args[1].equals("restart")) {
-                var secret = getConfig().getString(CFG_AGENT_SECRET_KEY);
-                if (secret == null || secret.length() == 0) {
-                    sender.sendMessage("cannot restart playit.gg connection as secret is not set");
-                    return true;
-                }
+                resetConnection(null);
+                broadcast("restarting connection as requested by: " + sender.getName());
+                return true;
+            }
 
-                setSecret(secret);
-                Bukkit.broadcastMessage("restarting playit.gg connection as requested by: " + sender.getName());
+            if (args.length > 1 && args[1].equals("reset")) {
+                getConfig().set(CFG_AGENT_SECRET_KEY, "");
+                resetConnection(null);
                 return true;
             }
 
@@ -95,7 +141,7 @@ public final class PlayitBukkit extends JavaPlugin {
                         playitManager = null;
                     }
                 }
-                Bukkit.broadcastMessage("shutting down playit.gg connection as requested by: " + sender.getName());
+                broadcast("shutting down connection as requested by: " + sender.getName());
                 return true;
             }
 
@@ -105,7 +151,7 @@ public final class PlayitBukkit extends JavaPlugin {
                     sender.sendMessage("invalid secret key");
                     return true;
                 }
-                setSecret(secretKey);
+                resetConnection(secretKey);
                 sender.sendMessage("updated secret key, connecting to new tunnel server");
                 return true;
             }
@@ -153,10 +199,58 @@ public final class PlayitBukkit extends JavaPlugin {
             return false;
         }
 
+        if (args.length > 0 && args[0].equals("tunnel")) {
+            if (args.length > 1 && args[1].equals("get-address")) {
+                var m = playitManager;
+                if (m != null) {
+                    var a = m.getAddress();
+                    if (a != null) {
+                        broadcast(a);
+                        return true;
+                    }
+                }
+
+                sender.sendMessage("playit.gg is still setting up");
+                return true;
+            }
+        }
+
+        if (args.length > 0 && args[0].equals("account")) {
+            if (args.length > 1 && args[1].equals("guest-login-link")) {
+                var secret = getConfig().getString(CFG_AGENT_SECRET_KEY);
+                if (secret == null) {
+                    sender.sendMessage("ERROR: secret not set");
+                    return true;
+                }
+
+                sender.sendMessage("preparing login link");
+
+                new Thread(() -> {
+                    try {
+                        var api = new ApiClient(secret);
+                        var session = api.createGuestWebSessionKey();
+
+                        var url = "https://playit.gg/login/guest-account/" + session;
+                        log.info("generated login url: " + url);
+
+                        sender.sendMessage("generated login url");
+                        sender.sendMessage("URL: " + url);
+                    } catch (ApiError e) {
+                        log.warning("failed to create guest secret: " + e);
+                        sender.sendMessage("error: " + e.getMessage());
+                    } catch (IOException e) {
+                        log.severe("failed to create guest secret: " + e);
+                    }
+                }).start();
+
+                return true;
+            }
+        }
+
         return false;
     }
 
-    private void setSecret(String secretKey) {
+    private void resetConnection(String secretKey) {
         if (secretKey != null) {
             getConfig().set(CFG_AGENT_SECRET_KEY, secretKey);
             saveConfig();
@@ -192,12 +286,18 @@ public final class PlayitBukkit extends JavaPlugin {
         }
 
         if (argCount == 0) {
-            return List.of("agent", "tunnel", "prop");
+            return List.of("agent", "tunnel", "prop", "account");
+        }
+
+        if (args[0].equals("account")) {
+            if (argCount == 1) {
+                return List.of("guest-login-link");
+            }
         }
 
         if (args[0].equals("agent")) {
             if (argCount == 1) {
-                return List.of("set-secret", "shutdown", "status", "restart");
+                return List.of("set-secret", "shutdown", "status", "restart", "reset");
             }
         }
 
@@ -217,7 +317,7 @@ public final class PlayitBukkit extends JavaPlugin {
 
         if (args[0].equals("tunnel")) {
             if (argCount == 1) {
-                return List.of("get-address", "status");
+                return List.of("get-address");
             }
         }
 

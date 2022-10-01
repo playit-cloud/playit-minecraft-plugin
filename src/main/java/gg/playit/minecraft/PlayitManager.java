@@ -1,9 +1,11 @@
 package gg.playit.minecraft;
 
 import gg.playit.api.ApiClient;
+import gg.playit.api.models.Notice;
 import gg.playit.control.PlayitControlChannel;
 import gg.playit.messages.ControlFeedReader;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -30,7 +32,30 @@ public class PlayitManager implements Runnable {
     }
 
     private final PlayitKeysSetup setup;
-    private PlayitKeysSetup.PlayitKeys keys;
+    private volatile PlayitKeysSetup.PlayitKeys keys;
+
+    public boolean isGuest() {
+        return keys != null && keys.isGuest;
+    }
+
+    public boolean emailVerified() {
+        return keys == null || keys.isEmailVerified;
+    }
+
+    public String getAddress() {
+        if (keys == null) {
+            return null;
+        }
+        return keys.tunnelAddress;
+    }
+
+    public Notice getNotice() {
+        var k = keys;
+        if (k == null) {
+            return null;
+        }
+        return k.notice;
+    }
 
     public volatile int connectionTimeoutSeconds = 30;
     public static final int STATE_INIT = -1;
@@ -76,11 +101,14 @@ public class PlayitManager implements Runnable {
             }
 
             if (state.get() == PlayitKeysSetup.STATE_MISSING_SECRET) {
-                for (var player : plugin.server.getOnlinePlayers()) {
-                    if (player.isOp()) {
-                        player.sendMessage("Visit https://playit.gg/mc/" + setup.getClaimCode() + " to setup playit");
-                    } else {
-                        player.sendMessage("Check server logs to get playit.gg claim link to setup tunnel (or be a Server Operator)");
+                var code = setup.getClaimCode();
+                if (code != null) {
+                    for (var player : plugin.server.getOnlinePlayers()) {
+                        if (player.isOp()) {
+                            player.sendMessage("Visit " + ChatColor.RED + "https://playit.gg/mc/" + code + ChatColor.RESET + " to setup playit");
+                        } else {
+                            player.sendMessage("Check server logs to get playit.gg claim link to setup tunnel (or be a Server Operator)");
+                        }
                     }
                 }
 
@@ -100,8 +128,8 @@ public class PlayitManager implements Runnable {
         plugin.saveConfig();
 
         if (keys.isGuest) {
-            plugin.server.broadcastMessage("WARNING: playit.gg plugin is running with a guest account");
-            plugin.server.broadcastMessage("see server console for setup URL");
+            plugin.broadcast(ChatColor.RED + "WARNING: " + ChatColor.RESET + " plugin is running with a guest account");
+            plugin.broadcast("see server console for setup URL");
 
             var api = new ApiClient(keys.secretKey);
 
@@ -117,18 +145,18 @@ public class PlayitManager implements Runnable {
                 for (var player : plugin.server.getOnlinePlayers()) {
                     if (player.isOp()) {
                         player.sendMessage("setup playit.gg account");
-                        player.sendMessage("URL: " + url);
+                        player.sendMessage(ChatColor.RED + "URL: " + ChatColor.RESET + url);
                     }
                 }
             } catch (IOException e) {
                 log.severe("failed to generate web session key: " + e);
             }
         } else if (keys.isEmailVerified) {
-            plugin.server.broadcastMessage("WARNING: email associated with playit.gg account is not verified");
+            plugin.broadcast(ChatColor.RED + "WARNING: " + ChatColor.RESET + "email associated with playit.gg account is not verified");
         }
 
-        plugin.server.broadcastMessage("playit.gg tunnel address");
-        plugin.server.broadcastMessage("ADDR: " + keys.tunnelAddress);
+        plugin.broadcast("tunnel setup");
+        plugin.broadcast(keys.tunnelAddress);
 
         if (state.get() == STATE_SHUTDOWN) {
             return;

@@ -4,6 +4,7 @@ import gg.playit.api.ApiClient;
 import gg.playit.api.ApiError;
 import gg.playit.api.actions.CreateTunnel;
 import gg.playit.api.models.AccountTunnel;
+import gg.playit.api.models.Notice;
 import gg.playit.api.models.PortType;
 import gg.playit.api.models.TunnelType;
 import org.apache.commons.codec.binary.Hex;
@@ -86,6 +87,7 @@ public class PlayitKeysSetup {
                     keys.isGuest = status.isGuest;
                     keys.isEmailVerified = status.emailVerified;
                     keys.agentId = status.agentId;
+                    keys.notice = status.notice;
 
                     state.compareAndSet(STATE_CHECKING_SECRET, STATE_CREATING_TUNNEL);
                     return null;
@@ -144,5 +146,6 @@ public class PlayitKeysSetup {
         public String tunnelAddress;
         public boolean isGuest;
         public boolean isEmailVerified;
+        public Notice notice;
     }
 }

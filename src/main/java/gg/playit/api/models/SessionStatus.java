@@ -17,6 +17,8 @@ public class SessionStatus {
     @JsonProperty("agent_id")
     public String agentId;
 
+    public Notice notice;
+
     @Override
     public String toString() {
         return "SessionStatus{" +
@@ -24,6 +26,7 @@ public class SessionStatus {
                 ", isGuest=" + isGuest +
                 ", emailVerified=" + emailVerified +
                 ", agentId='" + agentId + '\'' +
+                ", notice=" + notice +
                 '}';
     }
 }
