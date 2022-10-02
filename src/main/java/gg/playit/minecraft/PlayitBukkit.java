@@ -64,7 +64,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
         if (player.isOp()) {
             if (manager.isGuest()) {
                 player.sendMessage(ChatColor.RED + "WARNING:" + ChatColor.RESET + " playit.gg is running with a guest account");
-            } else if (manager.emailVerified()) {
+            } else if (!manager.emailVerified()) {
                 player.sendMessage(ChatColor.RED + "WARNING:" + ChatColor.RESET + " your email on playit.gg is not verified");
             }
 
