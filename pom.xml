@@ -70,6 +70,8 @@
                     <descriptorRefs>
                         <descriptorRef>jar-with-dependencies</descriptorRef>
                     </descriptorRefs>
+                    <finalName>playit-minecraft-plugin</finalName>
+                    <appendAssemblyId>false</appendAssemblyId>
                     <excludeScope>provided</excludeScope>
                 </configuration>
             </plugin>
