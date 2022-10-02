@@ -15,6 +15,11 @@ jobs:
         with:
           java-version: '18'
           distribution: 'adopt'
+      - name: Get release
+        id: get_release
+        uses: bruceadams/get-release@v1.2.3
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - name: Build Package
         run: mvn --batch-mode package
       - name: Upload Release
@@ -22,7 +27,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
           asset_path: ./target/playit-minecraft-plugin.jar
           asset_name: playit-minecraft-plugin.jar
           asset_content_type: application/java-archive
