@@ -3,7 +3,7 @@ package gg.playit.api;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import gg.playit.api.actions.*;
 import gg.playit.api.models.*;
-import org.apache.commons.codec.DecoderException;
+import gg.playit.minecraft.utils.DecoderException;
 
 import java.io.IOException;
 import java.net.URI;

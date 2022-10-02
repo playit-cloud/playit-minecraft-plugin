@@ -151,7 +151,7 @@ public class PlayitManager implements Runnable {
             } catch (IOException e) {
                 log.severe("failed to generate web session key: " + e);
             }
-        } else if (keys.isEmailVerified) {
+        } else if (!keys.isEmailVerified) {
             plugin.broadcast(ChatColor.RED + "WARNING: " + ChatColor.RESET + "email associated with playit.gg account is not verified");
         }
 

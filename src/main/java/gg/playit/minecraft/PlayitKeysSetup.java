@@ -7,7 +7,7 @@ import gg.playit.api.models.AccountTunnel;
 import gg.playit.api.models.Notice;
 import gg.playit.api.models.PortType;
 import gg.playit.api.models.TunnelType;
-import org.apache.commons.codec.binary.Hex;
+import gg.playit.minecraft.utils.Hex;
 
 import java.io.IOException;
 import java.net.InetAddress;

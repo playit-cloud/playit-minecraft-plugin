@@ -5,7 +5,7 @@ import gg.playit.api.actions.SignAgentRegister;
 import gg.playit.messages.ControlFeedReader;
 import gg.playit.messages.ControlRequestWriter;
 import gg.playit.messages.DecodeException;
-import org.apache.commons.codec.DecoderException;
+import gg.playit.minecraft.utils.DecoderException;
 
 import java.io.IOException;
 import java.net.*;
