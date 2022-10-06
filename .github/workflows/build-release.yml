@@ -1,4 +1,4 @@
-name: Maven Publish
+name: Build Release
 
 on:
   release:
