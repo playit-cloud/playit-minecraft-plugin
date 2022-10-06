@@ -3,7 +3,7 @@ version: 0.1.4
 main: gg.playit.minecraft.PlayitBukkit
 author: https://playit.gg
 description: Makes your server public so friends can connect
-api-version: 1.18
+api-version: 1.16
 
 commands:
   playit:
