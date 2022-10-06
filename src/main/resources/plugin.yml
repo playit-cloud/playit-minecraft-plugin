@@ -1,5 +1,5 @@
 name: playit-gg
-version: 0.1.1
+version: 0.1.4
 main: gg.playit.minecraft.PlayitBukkit
 author: https://playit.gg
 description: Makes your server public so friends can connect
