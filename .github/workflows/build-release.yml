@@ -1,4 +1,4 @@
-name: Maven Publish
+name: Build Release
 
 on:
   release:
@@ -10,10 +10,10 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v3
-      - name: Set up JDK 18
+      - name: Set up JDK 8
         uses: actions/setup-java@v3
         with:
-          java-version: '18'
+          java-version: '8'
           distribution: 'adopt'
       - name: Get release
         id: get_release
