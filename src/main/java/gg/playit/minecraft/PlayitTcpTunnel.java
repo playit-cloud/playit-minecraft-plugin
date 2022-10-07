@@ -117,7 +117,7 @@ public class PlayitTcpTunnel {
                     return;
                 }
 
-                var minecraftClient = new Bootstrap();
+                Bootstrap minecraftClient = new Bootstrap();
                 minecraftClient.group(group);
                 minecraftClient.option(ChannelOption.TCP_NODELAY, true);
                 minecraftClient.channel(NioSocketChannel.class);
@@ -256,7 +256,7 @@ public class PlayitTcpTunnel {
                 log.warning("failed to set remote address to " + trueIp);
             }
 
-            var channel = tunnelChannel.pipeline().removeLast();
+            ChannelHandler channel = tunnelChannel.pipeline().removeLast();
             tunnelChannel.pipeline()
                     .addLast("timeout", new ReadTimeoutHandler(connectionTimeoutSeconds))
                     .addLast("legacy_query", (ChannelHandler) legacyPingHandler)

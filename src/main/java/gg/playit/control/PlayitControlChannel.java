@@ -48,14 +48,14 @@ public class PlayitControlChannel implements Closeable {
 
     public Optional<ControlFeedReader.ControlFeed> update() throws IOException {
         try {
-            var now = Instant.now().toEpochMilli();
+            long now = Instant.now().toEpochMilli();
 
             if (now - lastPing > 5_000) {
                 lastPing = now;
                 this.sendPing(now);
             }
 
-            var tillExpire = this.registered.expiresAt - now;
+            long tillExpire = this.registered.expiresAt - now;
             if (tillExpire < 60_000 && 10_000 < now - lastKeepAlive) {
                 log.info("send keep alive");
                 lastKeepAlive = now;
@@ -78,21 +78,23 @@ public class PlayitControlChannel implements Closeable {
                 return Optional.empty();
             }
 
-            var buffer = ByteBuffer.wrap(
+            ByteBuffer buffer = ByteBuffer.wrap(
                     rxPacket.getData(),
                     rxPacket.getOffset(),
                     rxPacket.getLength()
             );
 
-            var read = ControlFeedReader.read(buffer);
+            ControlFeedReader.ControlFeed read = ControlFeedReader.read(buffer);
 
-            if (read instanceof ControlFeedReader.Pong pong) {
+            if (read instanceof ControlFeedReader.Pong) {
+                ControlFeedReader.Pong pong = (ControlFeedReader.Pong) read;
                 this.latestPong = pong;
 
                 if (pong.sessionExpireAt != 0) {
                     this.registered.expiresAt = pong.sessionExpireAt;
                 }
-            } else if (read instanceof ControlFeedReader.AgentRegistered registered) {
+            } else if (read instanceof ControlFeedReader.AgentRegistered) {
+                ControlFeedReader.AgentRegistered registered = (ControlFeedReader.AgentRegistered) read;
                 this.registered = registered;
             }
 

@@ -3,10 +3,7 @@ package gg.playit.minecraft;
 import gg.playit.api.ApiClient;
 import gg.playit.api.ApiError;
 import gg.playit.api.actions.CreateTunnel;
-import gg.playit.api.models.AccountTunnel;
-import gg.playit.api.models.Notice;
-import gg.playit.api.models.PortType;
-import gg.playit.api.models.TunnelType;
+import gg.playit.api.models.*;
 import gg.playit.minecraft.utils.Hex;
 
 import java.io.IOException;
@@ -48,7 +45,7 @@ public class PlayitKeysSetup {
 
     public PlayitKeys progress() throws IOException {
         switch (state.get()) {
-            case STATE_INIT -> {
+            case STATE_INIT: {
                 if (keys.secretKey == null) {
                     state.compareAndSet(STATE_INIT, STATE_MISSING_SECRET);
                     return null;
@@ -58,7 +55,7 @@ public class PlayitKeysSetup {
                 log.info("secret key found, checking");
                 return null;
             }
-            case STATE_MISSING_SECRET -> {
+            case STATE_MISSING_SECRET: {
                 if (claimCode == null) {
                     byte[] array = new byte[8];
                     new Random().nextBytes(array);
@@ -77,12 +74,12 @@ public class PlayitKeysSetup {
 
                 return null;
             }
-            case STATE_CHECKING_SECRET -> {
+            case STATE_CHECKING_SECRET: {
                 log.info("check secret");
 
-                var api = new ApiClient(keys.secretKey);
+                ApiClient api = new ApiClient(keys.secretKey);
                 try {
-                    var status = api.getStatus();
+                    SessionStatus status = api.getStatus();
 
                     keys.isGuest = status.isGuest;
                     keys.isEmailVerified = status.emailVerified;
@@ -107,10 +104,10 @@ public class PlayitKeysSetup {
                     throw e;
                 }
             }
-            case STATE_CREATING_TUNNEL -> {
-                var api = new ApiClient(keys.secretKey);
+            case STATE_CREATING_TUNNEL: {
+                ApiClient api = new ApiClient(keys.secretKey);
 
-                var tunnels = api.listTunnels();
+                AccountTunnels tunnels = api.listTunnels();
                 keys.tunnelAddress = null;
 
                 for (AccountTunnel tunnel : tunnels.tunnels) {
@@ -123,7 +120,7 @@ public class PlayitKeysSetup {
 
                 log.info("create new minecraft java tunnel");
 
-                var create = new CreateTunnel();
+                CreateTunnel create = new CreateTunnel();
                 create.localIp = "127.0.0.1";
                 create.portCount = 1;
                 create.portType = PortType.TCP;
@@ -134,7 +131,7 @@ public class PlayitKeysSetup {
 
                 return null;
             }
-            default -> {
+            default: {
                 return null;
             }
         }

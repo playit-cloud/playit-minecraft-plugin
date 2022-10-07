@@ -6,10 +6,12 @@ import gg.playit.control.PlayitControlChannel;
 import gg.playit.messages.ControlFeedReader;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.entity.Player;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
@@ -23,7 +25,7 @@ public class PlayitManager implements Runnable {
     public PlayitManager(PlayitBukkit plugin) {
         this.plugin = plugin;
 
-        var secret = plugin.getConfig().getString(PlayitBukkit.CFG_AGENT_SECRET_KEY);
+        String secret = plugin.getConfig().getString(PlayitBukkit.CFG_AGENT_SECRET_KEY);
         if (secret != null && secret.length() < 32) {
             secret = null;
         }
@@ -50,7 +52,7 @@ public class PlayitManager implements Runnable {
     }
 
     public Notice getNotice() {
-        var k = keys;
+        PlayitKeysSetup.PlayitKeys k = keys;
         if (k == null) {
             return null;
         }
@@ -101,9 +103,9 @@ public class PlayitManager implements Runnable {
             }
 
             if (state.get() == PlayitKeysSetup.STATE_MISSING_SECRET) {
-                var code = setup.getClaimCode();
+                String code = setup.getClaimCode();
                 if (code != null) {
-                    for (var player : plugin.server.getOnlinePlayers()) {
+                    for (Player player : plugin.server.getOnlinePlayers()) {
                         if (player.isOp()) {
                             player.sendMessage("Visit " + ChatColor.RED + "https://playit.gg/mc/" + code + ChatColor.RESET + " to setup playit");
                         } else {
@@ -131,18 +133,18 @@ public class PlayitManager implements Runnable {
             plugin.broadcast(ChatColor.RED + "WARNING: " + ChatColor.RESET + " plugin is running with a guest account");
             plugin.broadcast("see server console for setup URL");
 
-            var api = new ApiClient(keys.secretKey);
+            ApiClient api = new ApiClient(keys.secretKey);
 
             try {
-                var key = api.createGuestWebSessionKey();
-                var url = "https://playit.gg/login/guest-account/" + key;
+                String key = api.createGuestWebSessionKey();
+                String url = "https://playit.gg/login/guest-account/" + key;
                 log.info("setup playit.gg account: " + url);
 
                 if (state.get() == STATE_SHUTDOWN) {
                     return;
                 }
 
-                for (var player : plugin.server.getOnlinePlayers()) {
+                for (Player player : plugin.server.getOnlinePlayers()) {
                     if (player.isOp()) {
                         player.sendMessage("setup playit.gg account");
                         player.sendMessage(ChatColor.RED + "URL: " + ChatColor.RESET + url);
@@ -169,14 +171,15 @@ public class PlayitManager implements Runnable {
                 state.compareAndSet(STATE_CONNECTING, STATE_ONLINE);
 
                 while (state.get() == STATE_ONLINE) {
-                    var messageOpt = channel.update();
+                    Optional<ControlFeedReader.ControlFeed> messageOpt = channel.update();
                     if (messageOpt.isPresent()) {
-                        var feedMessage = messageOpt.get();
+                        ControlFeedReader.ControlFeed feedMessage = messageOpt.get();
 
-                        if (feedMessage instanceof ControlFeedReader.NewClient newClient) {
+                        if (feedMessage instanceof ControlFeedReader.NewClient) {
+                            ControlFeedReader.NewClient newClient = (ControlFeedReader.NewClient) feedMessage;
                             log.info("got new client: " + feedMessage);
 
-                            var key = newClient.peerAddr + "-" + newClient.connectAddr;
+                            String key = newClient.peerAddr + "-" + newClient.connectAddr;
                             if (tracker.addConnection(key)) {
                                 log.info("starting tcp tunnel for client");
 

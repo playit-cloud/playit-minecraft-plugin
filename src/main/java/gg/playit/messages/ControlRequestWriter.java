@@ -8,7 +8,7 @@ public class ControlRequestWriter {
         out.order(ByteOrder.BIG_ENDIAN);
         out.putLong(id);
 
-        var req = new RequestBodyWriter();
+        RequestBodyWriter req = new RequestBodyWriter();
         req.out = out;
         return req;
     }

@@ -28,7 +28,7 @@ public class SocketAddr {
     }
 
     public void readFrom(ByteBuffer in) {
-        var b = in.get();
+        byte b = in.get();
 
         if (b == 4) {
             ipBytes = new byte[4];
@@ -52,10 +52,10 @@ public class SocketAddr {
         }
 
         if (ipBytes.length == 16) {
-            var sb = new StringBuilder();
+            StringBuilder sb = new StringBuilder();
 
-            for (var i = 0; i < 16; ++i) {
-                var b = ipBytes[i];
+            for (int i = 0; i < 16; ++i) {
+                byte b = ipBytes[i];
 
                 if ((i % 2) == 0 && i != 0) {
                     sb.append(':');
@@ -81,11 +81,11 @@ public class SocketAddr {
             );
         }
         if (ipBytes.length == 16) {
-            var sb = new StringBuilder();
+            StringBuilder sb = new StringBuilder();
             sb.append('[');
 
-            for (var i = 0; i < 16; ++i) {
-                var b = ipBytes[i];
+            for (int i = 0; i < 16; ++i) {
+                byte b = ipBytes[i];
 
                 if ((i % 2) == 0 && i != 0) {
                     sb.append(':');

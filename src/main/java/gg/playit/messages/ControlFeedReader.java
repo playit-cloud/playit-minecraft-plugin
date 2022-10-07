@@ -10,16 +10,16 @@ public class ControlFeedReader {
     public static ControlFeed read(ByteBuffer in) {
         in.order(ByteOrder.BIG_ENDIAN);
 
-        var feedType = in.getInt();
+        int feedType = in.getInt();
         /* Response */
         if (feedType == 1) {
-            var requestId = in.getLong();
+            long requestId = in.getLong();
 
-            var responseType = in.getInt();
+            int responseType = in.getInt();
 
             /* Pong */
             if (responseType == 1) {
-                var pong = new Pong();
+                Pong pong = new Pong();
                 pong.readFrom(requestId, in);
                 return pong;
             }
@@ -41,7 +41,7 @@ public class ControlFeedReader {
             }
 
             if (responseType == 6) {
-                var res = new AgentRegistered();
+                AgentRegistered res = new AgentRegistered();
                 res.requestId = requestId;
                 res.id = new AgentSessionId();
                 res.id.readFrom(in);
@@ -53,7 +53,7 @@ public class ControlFeedReader {
         }
 
         if (feedType == 2) {
-            var res = new NewClient();
+            NewClient res = new NewClient();
             res.connectAddr = new SocketAddr();
             res.connectAddr.readFrom(in);
 
@@ -63,7 +63,7 @@ public class ControlFeedReader {
             res.claimAddress = new SocketAddr();
             res.claimAddress.readFrom(in);
 
-            var tokenLength = in.getLong();
+            long tokenLength = in.getLong();
             res.claimToken = new byte[(int) tokenLength];
             in.get(res.claimToken);
 

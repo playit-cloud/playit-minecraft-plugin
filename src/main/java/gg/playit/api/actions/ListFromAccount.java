@@ -22,9 +22,10 @@ public class ListFromAccount implements Action {
 
         @Override
         public String toString() {
-            return switch (this) {
-                case AccountTunnels -> "list-account-tunnels";
-            };
+            if (this == AccountTunnels) {
+                return "list-account-tunnels";
+            }
+            throw new IllegalStateException();
         }
     }
 }

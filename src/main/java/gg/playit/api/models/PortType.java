@@ -14,10 +14,15 @@ public enum PortType {
     @JsonValue
     @Override
     public String toString() {
-        return switch (this) {
-            case TCP -> "tcp";
-            case UDP -> "udp";
-            case BOTH -> "both";
-        };
+        if (this == TCP) {
+            return "tcp";
+        }
+        if (this == UDP) {
+            return "udp";
+        }
+        if (this == BOTH) {
+            return "both";
+        }
+        throw new IllegalStateException();
     }
 }

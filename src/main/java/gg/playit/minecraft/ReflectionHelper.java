@@ -58,8 +58,8 @@ public class ReflectionHelper {
     }
 
     static Class<?> cls(String... classNames) {
-        for (var name : classNames) {
-            var res = cls(name);
+        for (String name : classNames) {
+            Class<?> res = cls(name);
             if (res != null) {
                 return res;
             }
@@ -82,7 +82,7 @@ public class ReflectionHelper {
         }
 
         try {
-            var field = searchForFieldByName(NetworkManager, "packetListener");
+            Field field = searchForFieldByName(NetworkManager, "packetListener");
             field.setAccessible(true);
             field.set(networkManager, listener);
             return true;
@@ -90,7 +90,7 @@ public class ReflectionHelper {
             log.warning("failed to set packetListener" + e);
         }
 
-        var options = searchForFieldByType(NetworkManager, PacketListener);
+        List<Field> options = searchForFieldByType(NetworkManager, PacketListener);
         if (options.size() == 1) {
             try {
                 options.get(0).setAccessible(true);
@@ -115,7 +115,7 @@ public class ReflectionHelper {
             Field field = searchForFieldByName(ServerConnection, "connections");
             field.setAccessible(true);
 
-            var list = (List<Object>) field.get(serverConnection);
+            List<Object> list = (List<Object>) field.get(serverConnection);
             list.add(networkManager);
 
             return true;
@@ -125,13 +125,14 @@ public class ReflectionHelper {
 
         HashSet<Object> potentialFieldObjects = new HashSet<>();
 
-        var search = ServerConnection;
+        Class<?> search = ServerConnection;
         while (search != null) {
-            for (var field : ServerConnection.getDeclaredFields()) {
+            for (Field field : ServerConnection.getDeclaredFields()) {
                 if (List.class.isAssignableFrom(field.getType())) {
-                    if (field.getGenericType() instanceof ParameterizedType parameterizedType) {
-                        var type = parameterizedType.getActualTypeArguments()[0];
-                        var typeClass = cls(type.getTypeName());
+                    if (field.getGenericType() instanceof ParameterizedType) {
+                        ParameterizedType parameterizedType = (ParameterizedType) field.getGenericType();
+                        Type type = parameterizedType.getActualTypeArguments()[0];
+                        Class<?> typeClass = cls(type.getTypeName());
 
                         if (typeClass != null && NetworkManager.isAssignableFrom(typeClass)) {
                             try {
@@ -147,9 +148,9 @@ public class ReflectionHelper {
         }
 
         if (potentialFieldObjects.size() == 1) {
-            var found = potentialFieldObjects.toArray()[0];
+            Object found = potentialFieldObjects.toArray()[0];
             try {
-                var list = (List) found;
+                List list = (List) found;
                 list.add(networkManager);
                 return true;
             } catch (Exception e) {
@@ -329,7 +330,7 @@ public class ReflectionHelper {
             }
 
             try {
-                var field = searchForFieldByName(CraftServer, "console");
+                Field field = searchForFieldByName(CraftServer, "console");
                 field.setAccessible(true);
                 Object mcServer = field.get(server);
                 if (MinecraftServer.isInstance(mcServer)) {
@@ -351,7 +352,7 @@ public class ReflectionHelper {
         try {
             Method getConnection = searchMethod(MinecraftServer, "getConnection");
             getConnection.setAccessible(true);
-            var res = getConnection.invoke(object);
+            Object res = getConnection.invoke(object);
             if (ServerConnection.isInstance(res)) {
                 return res;
             }
@@ -359,9 +360,9 @@ public class ReflectionHelper {
         }
 
         try {
-            var field = MinecraftServer.getDeclaredField("connection");
+            Field field = MinecraftServer.getDeclaredField("connection");
             field.setAccessible(true);
-            var res = field.get(object);
+            Object res = field.get(object);
             if (ServerConnection.isInstance(res)) {
                 return res;
             }
@@ -383,7 +384,7 @@ public class ReflectionHelper {
             } catch (Exception ignore) {
             }
 
-            for (var method : subject.getDeclaredMethods()) {
+            for (Method method : subject.getDeclaredMethods()) {
                 Class<?>[] searchParamTypes = method.getParameterTypes();
                 if (!method.getName().equals(name) || searchParamTypes.length != parameterTypes.length) {
                     continue;
@@ -409,11 +410,11 @@ public class ReflectionHelper {
     }
 
     public Object searchForAttribute(Class<?> parent, Class<?> child, Object subject) {
-        for (var field : parent.getFields()) {
+        for (Field field : parent.getFields()) {
             if (child.isAssignableFrom(field.getType())) {
                 try {
                     field.setAccessible(true);
-                    var res = field.get(subject);
+                    Object res = field.get(subject);
                     if (child.isInstance(res)) {
                         return res;
                     }
@@ -422,11 +423,11 @@ public class ReflectionHelper {
             }
         }
 
-        for (var field : parent.getDeclaredFields()) {
+        for (Field field : parent.getDeclaredFields()) {
             if (child.isAssignableFrom(field.getType())) {
                 try {
                     field.setAccessible(true);
-                    var res = field.get(subject);
+                    Object res = field.get(subject);
                     if (child.isInstance(res)) {
                         return res;
                     }
@@ -451,11 +452,11 @@ public class ReflectionHelper {
     }
 
     public List<Field> searchForFieldByType(Class<?> subject, Class<?> type) {
-        var fields = new ArrayList<Field>();
+        ArrayList<Field> fields = new ArrayList<Field>();
 
         while (subject != null) {
             try {
-                for (var f : subject.getDeclaredFields()) {
+                for (Field f : subject.getDeclaredFields()) {
                     if (type.isAssignableFrom(f.getType())) {
                         fields.add(f);
                     }

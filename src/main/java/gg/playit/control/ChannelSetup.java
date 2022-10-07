@@ -25,7 +25,7 @@ public class ChannelSetup {
         /* prefer IPv6 */
         Arrays.sort(allByName, Comparator.comparingLong(a -> -a.getAddress().length));
 
-        var setup = new FindSuitableChannel();
+        FindSuitableChannel setup = new FindSuitableChannel();
         setup.options = allByName;
         return setup;
     }
@@ -34,22 +34,22 @@ public class ChannelSetup {
         private InetAddress[] options;
 
         public SetupRequireAuthentication findChannel() throws IOException {
-            var socket = new DatagramSocket();
+            DatagramSocket socket = new DatagramSocket();
 
             /* 3 second timeout */
             socket.setSoTimeout(3000);
 
-            var buffer = ByteBuffer.allocate(1024);
+            ByteBuffer buffer = ByteBuffer.allocate(1024);
             {
-                var builder = ControlRequestWriter.requestId(buffer, 1);
+                ControlRequestWriter.RequestBodyWriter builder = ControlRequestWriter.requestId(buffer, 1);
                 builder.ping(0, null);
             }
-            var bytesWritten = buffer.position();
+            int bytesWritten = buffer.position();
 
-            for (var option : options) {
-                for (var i = 0; i < 3; ++i) {
+            for (InetAddress option : options) {
+                for (int i = 0; i < 3; ++i) {
                     try {
-                        var packet = new DatagramPacket(buffer.array(), 0, bytesWritten, new InetSocketAddress(option, CONTROL_PORT));
+                        DatagramPacket packet = new DatagramPacket(buffer.array(), 0, bytesWritten, new InetSocketAddress(option, CONTROL_PORT));
                         socket.send(packet);
 
                         DatagramPacket rxPacket = new DatagramPacket(new byte[1024], 0, 1024);
@@ -60,12 +60,12 @@ public class ChannelSetup {
                             continue;
                         }
 
-                        var in = ByteBuffer.wrap(rxPacket.getData(), rxPacket.getOffset(), rxPacket.getLength());
+                        ByteBuffer in = ByteBuffer.wrap(rxPacket.getData(), rxPacket.getOffset(), rxPacket.getLength());
 
                         try {
-                            var message = ControlFeedReader.read(in);
+                            ControlFeedReader.ControlFeed message = ControlFeedReader.read(in);
                             if (message instanceof ControlFeedReader.Pong) {
-                                var next = new SetupRequireAuthentication();
+                                SetupRequireAuthentication next = new SetupRequireAuthentication();
                                 next.pong = (ControlFeedReader.Pong) message;
                                 next.socket = socket;
                                 next.address = option;
@@ -110,38 +110,39 @@ public class ChannelSetup {
                 throw new IOException("already used");
             }
 
-            var registerRequest = ByteBuffer.allocate(1024);
+            ByteBuffer registerRequest = ByteBuffer.allocate(1024);
 
             try {
-                var client = new ApiClient(secretKey);
-                var req = new SignAgentRegister();
+                ApiClient client = new ApiClient(secretKey);
+                SignAgentRegister req = new SignAgentRegister();
                 req.agentVersion = 10_001;
                 req.clientAddr = this.pong.clientAddr;
                 req.tunnelAddr = this.pong.tunnelAddr;
-                var data = client.getSignedAgentRegisterData(req);
+                byte[] data = client.getSignedAgentRegisterData(req);
                 ControlRequestWriter.requestId(registerRequest, 100).registerBytes(data);
             } catch (DecoderException e) {
                 throw new IOException("failed parse hex response from server", e);
             }
 
-            var packet = new DatagramPacket(registerRequest.array(), registerRequest.arrayOffset(), registerRequest.position());
+            DatagramPacket packet = new DatagramPacket(registerRequest.array(), registerRequest.arrayOffset(), registerRequest.position());
             packet.setAddress(this.address);
             packet.setPort(CONTROL_PORT);
 
             for (int i = 0; i < 4; i++) {
                 this.socket.send(packet);
-                var rxBuffer = new byte[1024];
+                byte[] rxBuffer = new byte[1024];
 
                 try {
                     DatagramPacket rxPacket = new DatagramPacket(rxBuffer, 1024);
                     this.socket.receive(rxPacket);
 
-                    var packetData = ByteBuffer.wrap(rxPacket.getData(), rxPacket.getOffset(), rxPacket.getLength());
+                    ByteBuffer packetData = ByteBuffer.wrap(rxPacket.getData(), rxPacket.getOffset(), rxPacket.getLength());
                     try {
-                        var response = ControlFeedReader.read(packetData);
+                        ControlFeedReader.ControlFeed response = ControlFeedReader.read(packetData);
 
-                        if (response instanceof ControlFeedReader.AgentRegistered registered) {
-                            var channel = new PlayitControlChannel();
+                        if (response instanceof ControlFeedReader.AgentRegistered) {
+                            ControlFeedReader.AgentRegistered registered = (ControlFeedReader.AgentRegistered) response;
+                            PlayitControlChannel channel = new PlayitControlChannel();
                             channel.apiClient = new ApiClient(secretKey);
                             channel.socket = this.socket;
                             channel.controlAddress = this.address;
@@ -153,7 +154,8 @@ public class ChannelSetup {
                             return channel;
                         }
 
-                        if (response instanceof ControlFeedReader.Error error) {
+                        if (response instanceof ControlFeedReader.Error) {
+                            ControlFeedReader.Error error = (ControlFeedReader.Error) response;
                             if (error == ControlFeedReader.Error.RequestQueued) {
                                 log.info("request queued, waiting 1 second before resend");
 

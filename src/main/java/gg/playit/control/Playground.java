@@ -6,8 +6,8 @@ import java.io.IOException;
 
 public class Playground {
     public static void main(String[] args) throws IOException {
-        var api = new ApiClient("");
-        var res = api.getStatus();
+        ApiClient api = new ApiClient("");
+        gg.playit.api.models.SessionStatus res = api.getStatus();
         System.out.println(res);
 
 //        try () {
