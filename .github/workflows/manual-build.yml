@@ -6,8 +6,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     environment: production
-    outputs:
-      minecraft_jar: ./target/playit-minecraft-plugin.jar
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 18
@@ -17,3 +15,8 @@ jobs:
           distribution: 'adopt'
       - name: Build Package
         run: mvn --batch-mode package
+      - name: Upload jar
+        uses: actions/upload-artifact@v3
+        with:
+          name: playit-minecraft-plugin.jar
+          path: ./target/playit-minecraft-plugin.jar
