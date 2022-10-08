@@ -9,9 +9,9 @@ Contributions welcome!
 
 | Server Type  | Playit works | Real IP works | Plugin Download                                                                                                                         |
 |--------------| ------------ |---------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| Spigot 1.19  | ✔️ | ✔️ | [0.1.4](https://github.com/playit-cloud/playit-minecraft-plugin/releases/download/v0.1.4/playit-minecraft-plugin.jar) |
-| Spigot 1.16.5 | ✔️ | ✔️ | [0.1.4-mc1.16](https://github.com/playit-cloud/playit-minecraft-plugin/releases/download/v0.1.4/playit-minecraft-plugin-1.16.jar) |
+| [Spigot 1.19](https://getbukkit.org/download/spigot)  | ✔️ | ✔️ | [0.1.4](https://github.com/playit-cloud/playit-minecraft-plugin/releases/download/v0.1.4/playit-minecraft-plugin.jar) |
+| [Spigot 1.16.5](https://getbukkit.org/download/spigot) | ✔️ | ✔️ | [0.1.4-mc1.16](https://github.com/playit-cloud/playit-minecraft-plugin/releases/download/v0.1.4/playit-minecraft-plugin-1.16.jar) |
 | [Paper 1.19](https://papermc.io/)   | ✔️ | ✔️ | [0.1.4](https://github.com/playit-cloud/playit-minecraft-plugin/releases/download/v0.1.4/playit-minecraft-plugin.jar) |
-| [Paper 1.8 - 1.18](https://papermc.io/) | ✔️ | ❌ | [0.1.4](https://github.com/playit-cloud/playit-minecraft-plugin/releases/download/v0.1.4/playit-minecraft-plugin.jar) |
+| [Paper 1.8 - 1.18](https://papermc.io/legacy) | ✔️ | ❌ | [0.1.4](https://github.com/playit-cloud/playit-minecraft-plugin/releases/download/v0.1.4/playit-minecraft-plugin.jar) |
 ### Other Links
 * https://www.spigotmc.org/resources/playit-gg.105566/
