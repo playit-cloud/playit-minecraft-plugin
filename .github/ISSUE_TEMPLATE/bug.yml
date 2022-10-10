@@ -1,6 +1,7 @@
 name: 🐛 Bug
 description: Report an issue to help improve the project.
 labels: ['🛠 goal: fix']
+blank_issues_enabled: false
 body:
   - type: textarea
     id: description
