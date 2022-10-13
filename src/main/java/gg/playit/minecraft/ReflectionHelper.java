@@ -14,6 +14,8 @@ import java.util.logging.Logger;
 public class ReflectionHelper {
     static Logger log = Logger.getLogger(ReflectionHelper.class.getName());
 
+    public final Class<?> DynmapPlugin;
+
     private final Class<?> ServerConnection;
     private final Class<?> LegacyPingHandler;
     private final Class<?> MinecraftServer;
@@ -31,6 +33,8 @@ public class ReflectionHelper {
     private final Class<?> CraftServer;
 
     public ReflectionHelper() {
+        DynmapPlugin = cls("org.dynmap.bukkit.DynmapPlugin");
+
         ServerConnection = cls("net.minecraft.server.network.ServerConnection");
         LegacyPingHandler = cls("net.minecraft.server.network.LegacyPingHandler");
         MinecraftServer = cls("net.minecraft.server.MinecraftServer");

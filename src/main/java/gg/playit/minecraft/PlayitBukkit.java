@@ -26,6 +26,8 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
     static Logger log = Logger.getLogger(PlayitBukkit.class.getName());
     final EventLoopGroup eventGroup = new NioEventLoopGroup();
 
+    public static final ReflectionHelper reflect = new ReflectionHelper();
+
     private final Object managerSync = new Object();
     private volatile PlayitManager playitManager;
 
@@ -49,11 +51,28 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
         var secretKey = getConfig().getString("agent-secret");
         resetConnection(secretKey);
 
+        tryIntegrateDynamap();
+
         try {
             PluginManager pm = Bukkit.getServer().getPluginManager();
             pm.registerEvents(this, this);
         } catch (Exception e) {
         }
+    }
+
+    void tryIntegrateDynamap() {
+        if (reflect.DynmapPlugin == null) {
+            return;
+        }
+
+        JavaPlugin dynmap;
+        try {
+            dynmap = getPlugin((Class<JavaPlugin>) reflect.DynmapPlugin);
+        } catch (Exception ignore) {
+            return;
+        }
+
+        log.info("found dynmap plugin");
     }
 
     @EventHandler

@@ -4,6 +4,7 @@ main: gg.playit.minecraft.PlayitBukkit
 author: https://playit.gg
 description: Makes your server public so friends can connect
 api-version: 1.18
+softdepend: [dynmap]
 
 commands:
   playit:
