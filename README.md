@@ -21,14 +21,13 @@ Contributions welcome!
 | [Paper 1.19](https://papermc.io/)   | ✔️ | ✔️ | [0.1.4](https://github.com/playit-cloud/playit-minecraft-plugin/releases/download/v0.1.4/playit-minecraft-plugin.jar) |
 | [Paper 1.8 - 1.18](https://papermc.io/legacy) | ✔️ | ❌ | [0.1.4](https://github.com/playit-cloud/playit-minecraft-plugin/releases/download/v0.1.4/playit-minecraft-plugin.jar) & [0.1.4-mc1.16](https://github.com/playit-cloud/playit-minecraft-plugin/releases/download/v0.1.4/playit-minecraft-plugin-1.16.jar)|
 | [Magma 1.18](https://magmafoundation.org/) | ✔️ | ❌ | [0.1.4](https://github.com/playit-cloud/playit-minecraft-plugin/releases/download/v0.1.4/playit-minecraft-plugin.jar)
-
+| [BungeeCord](https://www.spigotmc.org/wiki/bungeecord/) | 🚧 |   |
 
 
 ### Plugins
 
 | Plugin | Playit works |
 | ------ | ------------ |
-| [BungeeCord](https://www.spigotmc.org/wiki/bungeecord/) | 🚧 |
 | [Geysermc](https://geysermc.org/) | 🚧 |
 
 
