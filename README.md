@@ -29,6 +29,9 @@ Contributions welcome!
 | Plugin | Playit works |
 | ------ | ------------ |
 | [Geysermc](https://geysermc.org/) | 🚧 |
+| [Dynmap](https://www.spigotmc.org/resources/dynmap%C2%AE.274/) | 🚧 |
+| [Nova Modding Framwork](https://www.spigotmc.org/resources/nova-modding-framework-1-19-1-1-19-2.93648/) | ❌ |
+
 
 
 ### Other Links
