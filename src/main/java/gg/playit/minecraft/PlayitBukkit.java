@@ -23,7 +23,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
     public static final String CFG_AGENT_SECRET_KEY = "agent-secret";
     public static final String CFG_CONNECTION_TIMEOUT_SECONDS = "mc-timeout-sec";
     public static final String CFG_DEBUG_LOGGING = "debug-logging";
-    public static boolean debugLoggingEnabled = false;
+    private static boolean debugLogging = false;
 
     static Logger log = new Logger(PlayitBukkit.class.getName());
     final EventLoopGroup eventGroup = new NioEventLoopGroup();
@@ -54,9 +54,9 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
 
         var debugLogging = getConfig().getString(CFG_DEBUG_LOGGING);
         if ("true".equals(debugLogging)) {
-            debugLoggingEnabled = true;
+            PlayitBukkit.debugLogging = true;
         } else if ("false".equals(debugLogging)) {
-            debugLoggingEnabled = false;
+            PlayitBukkit.debugLogging = false;
         }
 
         try {
@@ -260,7 +260,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
         if (args.length > 0 && args[0].equals("logging")) {
             if (args.length > 1 && args[1].equals("enable")) {
                 getConfig().set(CFG_DEBUG_LOGGING, true);
-                debugLoggingEnabled = true;
+                setDebugLogging(true);
 
                 sender.sendMessage("enabled debug logging");
                 return true;
@@ -268,7 +268,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
 
             if (args.length > 1 && args[1].equals("disable")) {
                 getConfig().set(CFG_DEBUG_LOGGING, false);
-                debugLoggingEnabled = false;
+                setDebugLogging(false);
 
                 sender.sendMessage("disabled debug logging");
                 return true;
@@ -364,5 +364,13 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
             playitManager.shutdown();
             playitManager = null;
         }
+    }
+
+    public static boolean hasDebugLogging() {
+        return debugLogging;
+    }
+
+    public void setDebugLogging(boolean debugLogging) {
+        PlayitBukkit.debugLogging = debugLogging;
     }
 }

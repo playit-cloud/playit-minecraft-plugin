@@ -16,19 +16,19 @@ public class Logger {
     }
 
     public void debug(String format, Object... data) {
-        if (PlayitBukkit.debugLoggingEnabled) {
+        if (PlayitBukkit.hasDebugLogging()) {
             LOGGER.debug("[" + className + "] " + format, data);
         }
     }
 
     public void error(String format, Object... data) {
-        if (PlayitBukkit.debugLoggingEnabled) {
+        if (PlayitBukkit.hasDebugLogging()) {
             LOGGER.error("[" + className + "] " + format, data);
         }
     }
 
     public void warning(String format, Object... data) {
-        if (PlayitBukkit.debugLoggingEnabled) {
+        if (PlayitBukkit.hasDebugLogging()) {
             LOGGER.warn("[" + className + "] " + format, data);
         }
     }
