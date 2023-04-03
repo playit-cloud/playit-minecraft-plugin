@@ -3,6 +3,7 @@ package gg.playit.minecraft;
 import gg.playit.api.ApiClient;
 import gg.playit.api.ApiError;
 import gg.playit.api.models.Notice;
+import gg.playit.minecraft.utils.Logger;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import org.bukkit.Bukkit;
@@ -17,13 +18,14 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.logging.Logger;
 
 public final class PlayitBukkit extends JavaPlugin implements Listener {
     public static final String CFG_AGENT_SECRET_KEY = "agent-secret";
     public static final String CFG_CONNECTION_TIMEOUT_SECONDS = "mc-timeout-sec";
+    public static final String CFG_DEBUG_LOGGING = "debug-logging";
+    public static boolean debugLoggingEnabled = false;
 
-    static Logger log = Logger.getLogger(PlayitBukkit.class.getName());
+    static Logger log = new Logger(PlayitBukkit.class.getName());
     final EventLoopGroup eventGroup = new NioEventLoopGroup();
 
     private final Object managerSync = new Object();
@@ -40,14 +42,22 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
             command.setExecutor(this);
             command.setTabCompleter(this);
         } else {
-            log.severe("failed to setup command /playit");
+            log.error("failed to setup command /playit");
         }
 
         getConfig().addDefault("agent-secret", "");
+        getConfig().addDefault("debug-logging", "false");
         saveDefaultConfig();
 
         var secretKey = getConfig().getString("agent-secret");
         resetConnection(secretKey);
+
+        var debugLogging = getConfig().getString(CFG_DEBUG_LOGGING);
+        if ("true".equals(debugLogging)) {
+            debugLoggingEnabled = true;
+        } else if ("false".equals(debugLogging)) {
+            debugLoggingEnabled = false;
+        }
 
         try {
             PluginManager pm = Bukkit.getServer().getPluginManager();
@@ -239,10 +249,28 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
                         log.warning("failed to create guest secret: " + e);
                         sender.sendMessage("error: " + e.getMessage());
                     } catch (IOException e) {
-                        log.severe("failed to create guest secret: " + e);
+                        log.error("failed to create guest secret: " + e);
                     }
                 }).start();
 
+                return true;
+            }
+        }
+
+        if (args.length > 0 && args[0].equals("logging")) {
+            if (args.length > 1 && args[1].equals("enable")) {
+                getConfig().set(CFG_DEBUG_LOGGING, true);
+                debugLoggingEnabled = true;
+
+                sender.sendMessage("enabled debug logging");
+                return true;
+            }
+
+            if (args.length > 1 && args[1].equals("disable")) {
+                getConfig().set(CFG_DEBUG_LOGGING, false);
+                debugLoggingEnabled = false;
+
+                sender.sendMessage("disabled debug logging");
                 return true;
             }
         }
@@ -286,7 +314,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
         }
 
         if (argCount == 0) {
-            return List.of("agent", "tunnel", "prop", "account");
+            return List.of("agent", "tunnel", "prop", "account", "logging");
         }
 
         if (args[0].equals("account")) {
@@ -318,6 +346,12 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
         if (args[0].equals("tunnel")) {
             if (argCount == 1) {
                 return List.of("get-address");
+            }
+        }
+
+        if (args[0].equals("logging")) {
+            if (argCount == 1) {
+                return List.of("enable", "disable");
             }
         }
 

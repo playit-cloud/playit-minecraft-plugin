@@ -1,5 +1,6 @@
 package gg.playit.minecraft;
 
+import gg.playit.minecraft.utils.Logger;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -10,10 +11,9 @@ import io.netty.handler.timeout.ReadTimeoutHandler;
 import org.bukkit.Server;
 
 import java.net.InetSocketAddress;
-import java.util.logging.Logger;
 
 public class PlayitTcpTunnel {
-    static Logger log = Logger.getLogger(PlayitTcpTunnel.class.getName());
+    static Logger log = new Logger(PlayitTcpTunnel.class.getName());
 
     private final InetSocketAddress trueIp;
     private final EventLoopGroup group;
@@ -64,7 +64,7 @@ public class PlayitTcpTunnel {
             }
         });
 
-        log.info("start connection to " + tunnelClaimAddress + " to claim client");
+        log.debug("start connection to " + tunnelClaimAddress + " to claim client");
         clientBootstrap.connect().addListener((ChannelFutureListener) future -> {
             if (!future.isSuccess()) {
                 log.warning("failed to establish connection to tunnel claim" + tunnelClaimAddress);
@@ -72,13 +72,13 @@ public class PlayitTcpTunnel {
                 return;
             }
 
-            log.info("connected to tunnel server, sending claim token");
+            log.debug("connected to tunnel server, sending claim token");
 
             future.channel().writeAndFlush(Unpooled.wrappedBuffer(tunnelClaimToken)).addListener(f -> {
                 if (!f.isSuccess()) {
                     log.warning("failed to send claim token");
                 } else {
-                    log.info("claim token sent");
+                    log.debug("claim token sent");
                 }
             });
         });
@@ -110,10 +110,10 @@ public class PlayitTcpTunnel {
                 byteBuf.readBytes(confirmBytesRemaining);
                 confirmBytesRemaining = 0;
 
-                log.info("connection to tunnel server has been established");
+                log.debug("connection to tunnel server has been established");
 
                 if (addChannelToMinecraftServer()) {
-                    log.info("added channel to minecraft server");
+                    log.debug("added channel to minecraft server");
                     return;
                 }
 
@@ -130,7 +130,7 @@ public class PlayitTcpTunnel {
                     }
                 });
 
-                log.info("connecting to minecraft server at " + minecraftServerAddress);
+                log.debug("connecting to minecraft server at " + minecraftServerAddress);
                 minecraftClient.connect().addListener((ChannelFutureListener) future -> {
                     if (!future.isSuccess()) {
                         log.warning("failed to connect to local minecraft server");
@@ -139,7 +139,7 @@ public class PlayitTcpTunnel {
                         return;
                     }
 
-                    log.info("connected to local minecraft server");
+                    log.debug("connected to local minecraft server");
 
                     if (byteBuf.readableBytes() == 0) {
                         byteBuf.release();
@@ -178,47 +178,47 @@ public class PlayitTcpTunnel {
 
         private boolean addChannelToMinecraftServer() {
             ReflectionHelper reflect = new ReflectionHelper();
-            log.info("Reflect: " + reflect);
+            log.debug("Reflect: " + reflect);
 
             Object minecraftServer = reflect.getMinecraftServer(server);
             if (minecraftServer == null) {
-                log.info("failed to get Minecraft server from Bukkit.getServer()");
+                log.debug("failed to get Minecraft server from Bukkit.getServer()");
                 return false;
             }
 
             Object serverConnection = reflect.serverConnectionFromMCServer(minecraftServer);
             if (serverConnection == null) {
-                log.info("failed to get ServerConnection from Minecraft Server");
+                log.debug("failed to get ServerConnection from Minecraft Server");
                 return false;
             }
 
             Object legacyPingHandler = reflect.newLegacyPingHandler(serverConnection);
             if (legacyPingHandler == null) {
-                log.info("legacyPingHandler is null");
+                log.debug("legacyPingHandler is null");
                 return false;
             }
 
             Object packetSplitter = reflect.newPacketSplitter();
             if (packetSplitter == null) {
-                log.info("packetSplitter is null");
+                log.debug("packetSplitter is null");
                 return false;
             }
 
             Object packetDecoder = reflect.newServerBoundPacketDecoder();
             if (packetDecoder == null) {
-                log.info("packetDecoder is null");
+                log.debug("packetDecoder is null");
                 return false;
             }
 
             Object packetPrepender = reflect.newPacketPrepender();
             if (packetPrepender == null) {
-                log.info("packetPrepender is null");
+                log.debug("packetPrepender is null");
                 return false;
             }
 
             Object packetEncoder = reflect.newClientBoundPacketEncoder();
             if (packetEncoder == null) {
-                log.info("packetEncoder is null");
+                log.debug("packetEncoder is null");
                 return false;
             }
 
@@ -237,18 +237,18 @@ public class PlayitTcpTunnel {
             }
 
             if (networkManager == null) {
-                log.info("networkManager is null");
+                log.debug("networkManager is null");
                 return false;
             }
 
             Object handshakeListener = reflect.newHandshakeListener(minecraftServer, networkManager);
             if (handshakeListener == null) {
-                log.info("handshakeListener is null");
+                log.debug("handshakeListener is null");
                 return false;
             }
 
             if (!reflect.networkManagerSetListener(networkManager, handshakeListener)) {
-                log.info("failed to set handshake listener on network manager");
+                log.debug("failed to set handshake listener on network manager");
                 return false;
             }
 
@@ -267,7 +267,7 @@ public class PlayitTcpTunnel {
                     .addLast("packet_handler", (ChannelHandler) networkManager);
 
             if (!reflect.addToServerConnections(serverConnection, networkManager)) {
-                log.info("failed to add to server connections");
+                log.debug("failed to add to server connections");
 
                 tunnelChannel.pipeline().remove("timeout");
                 tunnelChannel.pipeline().remove("legacy_query");
