@@ -1,5 +1,6 @@
 package gg.playit.minecraft;
 
+import gg.playit.minecraft.utils.Logger;
 import io.netty.channel.AbstractChannel;
 import io.netty.channel.Channel;
 import org.bukkit.Server;
@@ -9,10 +10,9 @@ import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.logging.Logger;
 
 public class ReflectionHelper {
-    static Logger log = Logger.getLogger(ReflectionHelper.class.getName());
+    static Logger log = new Logger(ReflectionHelper.class.getName());
 
     private final Class<?> ServerConnection;
     private final Class<?> LegacyPingHandler;

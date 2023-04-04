@@ -4,6 +4,7 @@ import gg.playit.api.ApiClient;
 import gg.playit.api.models.Notice;
 import gg.playit.control.PlayitControlChannel;
 import gg.playit.messages.ControlFeedReader;
+import gg.playit.minecraft.utils.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 
@@ -11,10 +12,9 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Logger;
 
 public class PlayitManager implements Runnable {
-    static Logger log = Logger.getLogger(PlayitManager.class.getName());
+    static Logger log = new Logger(PlayitManager.class.getName());
     private final AtomicInteger state = new AtomicInteger(STATE_INIT);
     private final PlayitConnectionTracker tracker = new PlayitConnectionTracker();
 
@@ -86,11 +86,11 @@ public class PlayitManager implements Runnable {
                 keys = setup.progress();
 
                 if (keys != null) {
-                    log.info("keys and tunnel setup");
+                    log.debug("keys and tunnel setup");
                     break;
                 }
             } catch (IOException e) {
-                log.severe("got error during setup: " + e);
+                log.error("got error during setup: " + e);
 
                 try {
                     Thread.sleep(3000);
@@ -120,7 +120,7 @@ public class PlayitManager implements Runnable {
         }
 
         if (keys == null) {
-            log.info("shutdown reached, tunnel connection never started");
+            log.debug("shutdown reached, tunnel connection never started");
             return;
         }
 
@@ -136,7 +136,7 @@ public class PlayitManager implements Runnable {
             try {
                 var key = api.createGuestWebSessionKey();
                 var url = "https://playit.gg/login/guest-account/" + key;
-                log.info("setup playit.gg account: " + url);
+                log.debug("setup playit.gg account: " + url);
 
                 if (state.get() == STATE_SHUTDOWN) {
                     return;
@@ -149,7 +149,7 @@ public class PlayitManager implements Runnable {
                     }
                 }
             } catch (IOException e) {
-                log.severe("failed to generate web session key: " + e);
+                log.error("failed to generate web session key: " + e);
             }
         } else if (!keys.isEmailVerified) {
             plugin.broadcast(ChatColor.RED + "WARNING: " + ChatColor.RESET + "email associated with playit.gg account is not verified");
@@ -174,11 +174,11 @@ public class PlayitManager implements Runnable {
                         var feedMessage = messageOpt.get();
 
                         if (feedMessage instanceof ControlFeedReader.NewClient newClient) {
-                            log.info("got new client: " + feedMessage);
+                            log.debug("got new client: " + feedMessage);
 
                             var key = newClient.peerAddr + "-" + newClient.connectAddr;
                             if (tracker.addConnection(key)) {
-                                log.info("starting tcp tunnel for client");
+                                log.debug("starting tcp tunnel for client");
 
                                 new PlayitTcpTunnel(
                                         new InetSocketAddress(InetAddress.getByAddress(newClient.peerAddr.ipBytes), Short.toUnsignedInt(newClient.peerAddr.portNumber)),
@@ -197,7 +197,7 @@ public class PlayitManager implements Runnable {
                 }
             } catch (IOException e) {
                 state.compareAndSet(STATE_ONLINE, STATE_ERROR_WAITING);
-                log.severe("failed when communicating with tunnel server, error: " + e);
+                log.error("failed when communicating with tunnel server, error: " + e);
 
                 if (e.getMessage().contains("invalid authentication")) {
                     state.set(STATE_INVALID_AUTH);
@@ -209,17 +209,17 @@ public class PlayitManager implements Runnable {
                 }
             } finally {
                 if (state.compareAndSet(STATE_SHUTDOWN, STATE_OFFLINE)) {
-                    log.info("control channel shutdown");
+                    log.debug("control channel shutdown");
                 } else if (state.compareAndSet(STATE_ERROR_WAITING, STATE_CONNECTING)) {
-                    log.info("trying to connect again");
+                    log.debug("trying to connect again");
                 } else if (state.compareAndSet(STATE_ONLINE, STATE_CONNECTING)) {
                     log.warning("unexpected state ONLINE, moving to CONNECTING");
                 }
                 if (state.get() == STATE_CONNECTING) {
-                    log.info("failed to connect, retrying");
+                    log.debug("failed to connect, retrying");
                 }
                 if (state.get() == STATE_INVALID_AUTH) {
-                    log.info("invalid auth, done trying");
+                    log.debug("invalid auth, done trying");
                 }
             }
         }

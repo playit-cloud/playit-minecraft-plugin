@@ -4,6 +4,7 @@ import gg.playit.api.ApiClient;
 import gg.playit.messages.ControlFeedReader;
 import gg.playit.messages.ControlRequestWriter;
 import gg.playit.messages.DecodeException;
+import gg.playit.minecraft.utils.Logger;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -16,12 +17,11 @@ import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Optional;
-import java.util.logging.Logger;
 
 import static gg.playit.control.ChannelSetup.CONTROL_PORT;
 
 public class PlayitControlChannel implements Closeable {
-    static Logger log = Logger.getLogger(ChannelSetup.class.getName());
+    static Logger log = new Logger(ChannelSetup.class.getName());
 
     ApiClient apiClient;
     DatagramSocket socket;
@@ -57,7 +57,7 @@ public class PlayitControlChannel implements Closeable {
 
             var tillExpire = this.registered.expiresAt - now;
             if (tillExpire < 60_000 && 10_000 < now - lastKeepAlive) {
-                log.info("send keep alive");
+                log.debug("send keep alive");
                 lastKeepAlive = now;
 
                 this.sendKeepAlive();

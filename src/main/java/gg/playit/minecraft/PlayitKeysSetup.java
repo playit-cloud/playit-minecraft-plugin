@@ -8,15 +8,15 @@ import gg.playit.api.models.Notice;
 import gg.playit.api.models.PortType;
 import gg.playit.api.models.TunnelType;
 import gg.playit.minecraft.utils.Hex;
+import gg.playit.minecraft.utils.Logger;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Logger;
 
 public class PlayitKeysSetup {
-    private static final Logger log = Logger.getLogger(PlayitKeysSetup.class.getName());
+    private static final Logger log = new Logger(PlayitKeysSetup.class.getName());
     public final AtomicInteger state;
     public static final int STATE_INIT = 1;
     public static final int STATE_MISSING_SECRET = 2;
@@ -55,7 +55,7 @@ public class PlayitKeysSetup {
                 }
 
                 state.compareAndSet(STATE_INIT, STATE_CHECKING_SECRET);
-                log.info("secret key found, checking");
+                log.debug("secret key found, checking");
                 return null;
             }
             case STATE_MISSING_SECRET -> {
@@ -63,10 +63,10 @@ public class PlayitKeysSetup {
                     byte[] array = new byte[8];
                     new Random().nextBytes(array);
                     claimCode = Hex.encodeHexString(array);
-                    log.info("secret key not set, generate claim code: " + claimCode);
+                    log.debug("secret key not set, generate claim code: " + claimCode);
                 }
 
-                log.info("trying to exchange claim code for secret");
+                log.debug("trying to exchange claim code for secret");
                 keys.secretKey = openClient.exchangeClaimForSecret(claimCode);
 
                 if (keys.secretKey == null) {
@@ -78,7 +78,7 @@ public class PlayitKeysSetup {
                 return null;
             }
             case STATE_CHECKING_SECRET -> {
-                log.info("check secret");
+                log.debug("check secret");
 
                 var api = new ApiClient(keys.secretKey);
                 try {
@@ -94,11 +94,11 @@ public class PlayitKeysSetup {
                 } catch (ApiError e) {
                     if (e.statusCode == 401 || e.statusCode == 400) {
                         if (claimCode == null) {
-                            log.info("secret key invalid, starting over");
+                            log.debug("secret key invalid, starting over");
                             state.compareAndSet(STATE_CHECKING_SECRET, STATE_MISSING_SECRET);
                         } else {
                             state.compareAndSet(STATE_CHECKING_SECRET, STATE_ERROR);
-                            log.info("secret failed verification after creating, moving to error state");
+                            log.debug("secret failed verification after creating, moving to error state");
                         }
 
                         return null;
@@ -116,12 +116,12 @@ public class PlayitKeysSetup {
                 for (AccountTunnel tunnel : tunnels.tunnels) {
                     if (tunnel.tunnelType == TunnelType.MinecraftJava) {
                         keys.tunnelAddress = tunnel.displayAddress;
-                        log.info("found minecraft java tunnel: " + keys.tunnelAddress);
+                        log.debug("found minecraft java tunnel: " + keys.tunnelAddress);
                         return keys;
                     }
                 }
 
-                log.info("create new minecraft java tunnel");
+                log.debug("create new minecraft java tunnel");
 
                 var create = new CreateTunnel();
                 create.localIp = "127.0.0.1";

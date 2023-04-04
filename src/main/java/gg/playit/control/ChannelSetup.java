@@ -6,6 +6,7 @@ import gg.playit.messages.ControlFeedReader;
 import gg.playit.messages.ControlRequestWriter;
 import gg.playit.messages.DecodeException;
 import gg.playit.minecraft.utils.DecoderException;
+import gg.playit.minecraft.utils.Logger;
 
 import java.io.IOException;
 import java.net.*;
@@ -13,12 +14,11 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.logging.Logger;
 
 public class ChannelSetup {
     public static final int CONTROL_PORT = 5525;
 
-    static Logger log = Logger.getLogger(ChannelSetup.class.getName());
+    static Logger log = new Logger(ChannelSetup.class.getName());
 
     public static FindSuitableChannel start() throws UnknownHostException {
         InetAddress[] allByName = InetAddress.getAllByName("control.playit.gg");
@@ -155,7 +155,7 @@ public class ChannelSetup {
 
                         if (response instanceof ControlFeedReader.Error error) {
                             if (error == ControlFeedReader.Error.RequestQueued) {
-                                log.info("request queued, waiting 1 second before resend");
+                                log.debug("request queued, waiting 1 second before resend");
 
                                 try {
                                     Thread.sleep(1000);
