@@ -261,6 +261,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
         if (args.length > 0 && args[0].equals("logging")) {
             if (args.length > 1 && args[1].equals("enable")) {
                 getConfig().set(CFG_DEBUG_LOGGING, true);
+                saveConfig();
                 setDebugLogging(true);
                 sender.sendMessage("enabled debug logging");
                 return true;
@@ -268,6 +269,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
 
             if (args.length > 1 && args[1].equals("disable")) {
                 getConfig().set(CFG_DEBUG_LOGGING, false);
+                saveConfig();
                 setDebugLogging(false);
                 sender.sendMessage("disabled debug logging");
                 return true;
