@@ -1,18 +1,24 @@
 package gg.playit.minecraft;
 
-import io.netty.channel.AbstractChannel;
-import io.netty.channel.Channel;
+import io.netty.channel.*;
+import io.netty.util.AttributeKey;
+import org.bukkit.Bukkit;
 import org.bukkit.Server;
 
 import java.lang.reflect.*;
 import java.net.SocketAddress;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 public class ReflectionHelper {
     static Logger log = Logger.getLogger(ReflectionHelper.class.getName());
+
+    private final Class<ChannelHandler> ServerBootstrapAcceptor;
+    private final Field SBA_childHandler;
+    private final Field SBA_childOptions;
+    private final Field SBA_childAttrs;
 
     private final Class<?> ServerConnection;
     private final Class<?> LegacyPingHandler;
@@ -31,6 +37,19 @@ public class ReflectionHelper {
     private final Class<?> CraftServer;
 
     public ReflectionHelper() {
+        ServerBootstrapAcceptor = (Class<ChannelHandler>) cls(
+                "io.netty.bootstrap.ServerBootstrap$ServerBootstrapAcceptor"
+        );
+        try {
+            SBA_childHandler = searchForFieldByName(ServerBootstrapAcceptor, "childHandler");
+            SBA_childHandler.setAccessible(true);
+            SBA_childOptions = searchForFieldByName(ServerBootstrapAcceptor, "childOptions");
+            SBA_childOptions.setAccessible(true);
+            SBA_childAttrs = searchForFieldByName(ServerBootstrapAcceptor, "childAttrs");
+            SBA_childAttrs.setAccessible(true);
+        } catch (Throwable throwable) {
+            throw new IllegalStateException("failed to get fields", throwable);
+        }
         ServerConnection = cls("net.minecraft.server.network.ServerConnection");
         LegacyPingHandler = cls("net.minecraft.server.network.LegacyPingHandler");
         MinecraftServer = cls("net.minecraft.server.MinecraftServer");
@@ -67,113 +86,6 @@ public class ReflectionHelper {
         return null;
     }
 
-    public boolean networkManagerSetListener(Object networkManager, Object listener) {
-        if (NetworkManager == null || PacketListener == null) {
-            return false;
-        }
-
-        try {
-            Method method = searchMethod(NetworkManager, "setListener", PacketListener);
-            method.setAccessible(true);
-            method.invoke(networkManager, listener);
-            return true;
-        } catch (Exception e) {
-            log.warning("failed to call setListener: " + e);
-        }
-
-        try {
-            var field = searchForFieldByName(NetworkManager, "packetListener");
-            field.setAccessible(true);
-            field.set(networkManager, listener);
-            return true;
-        } catch (Exception e) {
-            log.warning("failed to set packetListener" + e);
-        }
-
-        var options = searchForFieldByType(NetworkManager, PacketListener);
-        if (options.size() == 1) {
-            try {
-                options.get(0).setAccessible(true);
-                options.get(0).set(networkManager, listener);
-                return true;
-            } catch (Exception e) {
-                log.warning("failed to set packetListener directly to type" + options.get(0) + ", error: " + e);
-            }
-        } else {
-            log.warning("got multiple options for packet listener field: " + options);
-        }
-
-        return false;
-    }
-
-    public boolean addToServerConnections(Object serverConnection, Object networkManager) {
-        if (ServerConnection == null || NetworkManager == null) {
-            return false;
-        }
-
-        try {
-            Field field = searchForFieldByName(ServerConnection, "connections");
-            field.setAccessible(true);
-
-            var list = (List<Object>) field.get(serverConnection);
-            list.add(networkManager);
-
-            return true;
-        } catch (Exception e) {
-            log.warning("failed set field connections, error: " + e);
-        }
-
-        HashSet<Object> potentialFieldObjects = new HashSet<>();
-
-        var search = ServerConnection;
-        while (search != null) {
-            for (var field : ServerConnection.getDeclaredFields()) {
-                if (List.class.isAssignableFrom(field.getType())) {
-                    if (field.getGenericType() instanceof ParameterizedType parameterizedType) {
-                        var type = parameterizedType.getActualTypeArguments()[0];
-                        var typeClass = cls(type.getTypeName());
-
-                        if (typeClass != null && NetworkManager.isAssignableFrom(typeClass)) {
-                            try {
-                                field.setAccessible(true);
-                                potentialFieldObjects.add(field.get(serverConnection));
-                            } catch (Exception ignore) {
-                            }
-                        }
-                    }
-                }
-            }
-            search = search.getSuperclass();
-        }
-
-        if (potentialFieldObjects.size() == 1) {
-            var found = potentialFieldObjects.toArray()[0];
-            try {
-                var list = (List) found;
-                list.add(networkManager);
-                return true;
-            } catch (Exception e) {
-                log.warning("failed to add connection to " + found + ", error: " + e);
-            }
-        } else {
-            log.warning("multiple connection lists: " + potentialFieldObjects);
-        }
-
-        return false;
-    }
-
-    public Object newHandshakeListener(Object minecraftServer, Object networkManager) {
-        if (HandshakeListener == null) {
-            return null;
-        }
-
-        try {
-            return HandshakeListener.getConstructor(MinecraftServer, NetworkManager).newInstance(minecraftServer, networkManager);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
     public boolean setRemoteAddress(Channel channel, SocketAddress address) {
         try {
             Field field = AbstractChannel.class.getDeclaredField("remoteAddress");
@@ -186,124 +98,51 @@ public class ReflectionHelper {
         }
     }
 
-    public Integer getRateLimitFromMCServer(Object server) {
-        if (MinecraftServer == null) {
-            return null;
+    public ServerChannel findServerChannel(Object serverConnection) {
+        for (Field field : searchForFieldByType(serverConnection.getClass(), List.class)) {
+            try {
+                field.setAccessible(true);
+                List<?> list = (List<?>) field.get(serverConnection);
+                if (list != null && list.size() > 0 && list.get(0) instanceof ChannelFuture future &&
+                        future.isSuccess() && future.channel() instanceof ServerChannel) {
+                    return (ServerChannel) future.channel();
+                }
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException("should not reach here", e);
+            }
         }
 
+        return null;
+    }
+
+
+    public ChannelHandler findServerHandler(ServerChannel serverChannel) {
+        return serverChannel.pipeline().get(ServerBootstrapAcceptor);
+    }
+
+    public ChannelHandler findChildHandler(ChannelHandler serverAcceptor) {
         try {
-            return (Integer) searchMethod(MinecraftServer, "getRateLimitPacketsPerSecond").invoke(server);
-        } catch (Exception e) {
+            return (ChannelHandler) SBA_childHandler.get(serverAcceptor);
+        } catch (IllegalAccessException error) {
+            log.warning("failed to get childHandler, error: " + error);
             return null;
         }
     }
 
-    public Object newLegacyPingHandler(Object serverConnection) {
-        if (LegacyPingHandler == null || ServerConnection == null) {
-            return null;
-        }
-
+    public Map.Entry<ChannelOption<Object>, Object>[] findChildOptions(ChannelHandler serverAcceptor) {
         try {
-            return LegacyPingHandler.getConstructor(ServerConnection).newInstance(serverConnection);
-        } catch (NoSuchMethodException | InvocationTargetException | InstantiationException |
-                 IllegalAccessException e) {
+            return (Map.Entry<ChannelOption<Object>, Object>[]) SBA_childOptions.get(serverAcceptor);
+        } catch (IllegalAccessException error) {
+            log.warning("failed to get childOptions, error: " + error);
             return null;
         }
     }
 
-    public Object newPacketSplitter() {
-        if (PacketSplitter == null) {
-            return null;
-        }
-
+    public Map.Entry<AttributeKey<Object>, Object>[] findChildAttrs(ChannelHandler serverAcceptor) {
         try {
-            return PacketSplitter.getConstructor().newInstance();
-        } catch (NoSuchMethodException | InvocationTargetException | InstantiationException |
-                 IllegalAccessException e) {
-            return null;
-        }
-    }
-
-    public Object newServerBoundPacketDecoder() {
-        if (PacketDecoder == null) {
-            return null;
-        }
-
-        try {
-            return PacketDecoder.getConstructor(EnumProtocolDirection).newInstance(serverBound());
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    public Object newClientBoundPacketEncoder() {
-        if (PacketEncoder == null) {
-            return null;
-        }
-
-        try {
-            return PacketEncoder.getConstructor(EnumProtocolDirection).newInstance(clientBound());
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    public Object newPacketPrepender() {
-        if (PacketPrepender == null) {
-            return null;
-        }
-
-        try {
-            return PacketPrepender.getConstructor().newInstance();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    public Object newNetworkManagerServer(int rateLimit) {
-        if (NetworkManagerServer == null) {
-            return null;
-        }
-
-        try {
-            return NetworkManagerServer.getConstructor(Integer.class).newInstance(rateLimit);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    public Object newServerNetworkManager() {
-        if (NetworkManager == null) {
-            return null;
-        }
-
-        try {
-            return NetworkManager.getConstructor(EnumProtocolDirection).newInstance(serverBound());
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private Object serverBound() {
-        if (EnumProtocolDirection == null) {
-            return null;
-        }
-
-        try {
-            return Enum.valueOf((Class<Enum>) EnumProtocolDirection, "SERVERBOUND");
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private Object clientBound() {
-        if (EnumProtocolDirection == null) {
-            return null;
-        }
-
-        try {
-            return Enum.valueOf((Class<Enum>) EnumProtocolDirection, "CLIENTBOUND");
-        } catch (Exception e) {
+            return (Map.Entry<AttributeKey<Object>, Object>[]) SBA_childAttrs.get(serverAcceptor);
+        } catch (IllegalAccessException error) {
+            log.warning("failed to get childAttrs, error: " + error);
             return null;
         }
     }
@@ -472,7 +311,11 @@ public class ReflectionHelper {
     @Override
     public String toString() {
         return "ReflectionHelper{" +
-                "ServerConnection=" + ServerConnection +
+                "ServerBootstrapAcceptor=" + ServerBootstrapAcceptor +
+                ", SBA_childHandler=" + SBA_childHandler +
+                ", SBA_childOptions=" + SBA_childOptions +
+                ", SBA_childAttrs=" + SBA_childAttrs +
+                ", ServerConnection=" + ServerConnection +
                 ", LegacyPingHandler=" + LegacyPingHandler +
                 ", MinecraftServer=" + MinecraftServer +
                 ", PacketSplitter=" + PacketSplitter +

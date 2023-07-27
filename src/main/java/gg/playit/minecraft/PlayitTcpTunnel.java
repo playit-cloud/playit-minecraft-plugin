@@ -6,10 +6,11 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.timeout.ReadTimeoutHandler;
+import io.netty.util.AttributeKey;
 import org.bukkit.Server;
 
 import java.net.InetSocketAddress;
+import java.util.Map;
 import java.util.logging.Logger;
 
 public class PlayitTcpTunnel {
@@ -180,6 +181,11 @@ public class PlayitTcpTunnel {
             ReflectionHelper reflect = new ReflectionHelper();
             log.info("Reflect: " + reflect);
 
+            if (!reflect.setRemoteAddress(tunnelChannel, trueIp)) {
+                log.warning("failed to set remote address to " + trueIp);
+                return false;
+            }
+
             Object minecraftServer = reflect.getMinecraftServer(server);
             if (minecraftServer == null) {
                 log.info("failed to get Minecraft server from Bukkit.getServer()");
@@ -192,97 +198,45 @@ public class PlayitTcpTunnel {
                 return false;
             }
 
-            Object legacyPingHandler = reflect.newLegacyPingHandler(serverConnection);
-            if (legacyPingHandler == null) {
-                log.info("legacyPingHandler is null");
+            ServerChannel serverChannel = reflect.findServerChannel(serverConnection);
+            if (serverChannel == null) {
+                log.info("serverChannel is null");
                 return false;
             }
 
-            Object packetSplitter = reflect.newPacketSplitter();
-            if (packetSplitter == null) {
-                log.info("packetSplitter is null");
+            ChannelHandler serverHandler = reflect.findServerHandler(serverChannel);
+            if (serverHandler == null) {
+                log.info("serverHandler is null");
                 return false;
             }
 
-            Object packetDecoder = reflect.newServerBoundPacketDecoder();
-            if (packetDecoder == null) {
-                log.info("packetDecoder is null");
+            ChannelHandler handler = reflect.findChildHandler(serverHandler);
+            if (handler == null) {
+                log.info("handler is null");
                 return false;
             }
 
-            Object packetPrepender = reflect.newPacketPrepender();
-            if (packetPrepender == null) {
-                log.info("packetPrepender is null");
-                return false;
+            Map.Entry<ChannelOption<Object>, Object>[] options = reflect.findChildOptions(serverHandler);
+            if (options != null) {
+                for (Map.Entry<ChannelOption<Object>, Object> option : options) {
+                    tunnelChannel.config().setOption(option.getKey(), option.getValue());
+                }
             }
 
-            Object packetEncoder = reflect.newClientBoundPacketEncoder();
-            if (packetEncoder == null) {
-                log.info("packetEncoder is null");
-                return false;
+            Map.Entry<AttributeKey<Object>, Object>[] attrs = reflect.findChildAttrs(serverHandler);
+            if (attrs != null) {
+                for (Map.Entry<AttributeKey<Object>, Object> attr : attrs) {
+                    tunnelChannel.attr(attr.getKey()).set(attr.getValue());
+                }
             }
 
-            Integer rateLimitNullable = reflect.getRateLimitFromMCServer(minecraftServer);
-            if (rateLimitNullable == null) {
-                rateLimitNullable = 0;
-            }
+            ChannelPipeline pipeline = tunnelChannel.pipeline();
 
-            int rateLimit = rateLimitNullable;
+            pipeline.remove(this);
+            pipeline.addLast(handler);
 
-            Object networkManager;
-            if (rateLimit > 0) {
-                networkManager = reflect.newNetworkManagerServer(rateLimit);
-            } else {
-                networkManager = reflect.newServerNetworkManager();
-            }
-
-            if (networkManager == null) {
-                log.info("networkManager is null");
-                return false;
-            }
-
-            Object handshakeListener = reflect.newHandshakeListener(minecraftServer, networkManager);
-            if (handshakeListener == null) {
-                log.info("handshakeListener is null");
-                return false;
-            }
-
-            if (!reflect.networkManagerSetListener(networkManager, handshakeListener)) {
-                log.info("failed to set handshake listener on network manager");
-                return false;
-            }
-
-            if (!reflect.setRemoteAddress(tunnelChannel, trueIp)) {
-                log.warning("failed to set remote address to " + trueIp);
-            }
-
-            var channel = tunnelChannel.pipeline().removeLast();
-            tunnelChannel.pipeline()
-                    .addLast("timeout", new ReadTimeoutHandler(connectionTimeoutSeconds))
-                    .addLast("legacy_query", (ChannelHandler) legacyPingHandler)
-                    .addLast("splitter", (ChannelHandler) packetSplitter)
-                    .addLast("decoder", (ChannelHandler) packetDecoder)
-                    .addLast("prepender", (ChannelHandler) packetPrepender)
-                    .addLast("encoder", (ChannelHandler) packetEncoder)
-                    .addLast("packet_handler", (ChannelHandler) networkManager);
-
-            if (!reflect.addToServerConnections(serverConnection, networkManager)) {
-                log.info("failed to add to server connections");
-
-                tunnelChannel.pipeline().remove("timeout");
-                tunnelChannel.pipeline().remove("legacy_query");
-                tunnelChannel.pipeline().remove("splitter");
-                tunnelChannel.pipeline().remove("decoder");
-                tunnelChannel.pipeline().remove("prepender");
-                tunnelChannel.pipeline().remove("encoder");
-                tunnelChannel.pipeline().remove("packet_handler");
-
-                tunnelChannel.pipeline().addLast(channel);
-
-                return false;
-            }
-
-            tunnelChannel.pipeline().fireChannelActive();
+            pipeline.fireChannelRegistered();
+            pipeline.fireChannelActive();
             return true;
         }
     }
