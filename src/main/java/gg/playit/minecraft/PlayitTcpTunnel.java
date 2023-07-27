@@ -181,6 +181,11 @@ public class PlayitTcpTunnel {
             ReflectionHelper reflect = new ReflectionHelper();
             log.info("Reflect: " + reflect);
 
+            if (!reflect.setRemoteAddress(tunnelChannel, trueIp)) {
+                log.warning("failed to set remote address to " + trueIp);
+                return false;
+            }
+
             Object minecraftServer = reflect.getMinecraftServer(server);
             if (minecraftServer == null) {
                 log.info("failed to get Minecraft server from Bukkit.getServer()");
