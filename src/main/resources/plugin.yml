@@ -4,10 +4,13 @@ main: gg.playit.minecraft.PlayitBukkit
 author: https://playit.gg
 description: Makes your server public so friends can connect
 api-version: 1.18
+folia-supported: true
 
 commands:
   playit:
     description: Configure playit.gg
     usage: /playit
-    permission: Operators
-    permission-message: You must be a server operator to run the playit command
+
+permissions:
+  playit.admin:
+    default: op
