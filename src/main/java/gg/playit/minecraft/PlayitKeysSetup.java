@@ -25,10 +25,14 @@ public class PlayitKeysSetup {
     public static final int STATE_ERROR = 5;
     public static final int STATE_SHUTDOWN = 0;
     private final ApiClient openClient = new ApiClient(null);
+    private final boolean isGeyserPresent;
+    private final int geyserPort;
 
-    public PlayitKeysSetup(String secretKey, AtomicInteger state) {
+    public PlayitKeysSetup(String secretKey, AtomicInteger state, boolean isGeyserPresent, int geyserPort) {
         keys.secretKey = secretKey;
         this.state = state;
+        this.isGeyserPresent = isGeyserPresent;
+        this.geyserPort = geyserPort;
     }
 
     private final PlayitKeys keys = new PlayitKeys();
@@ -113,24 +117,54 @@ public class PlayitKeysSetup {
                 var tunnels = api.listTunnels();
                 keys.tunnelAddress = null;
 
+                boolean haveJava = false;
+                boolean haveBedrock = !isGeyserPresent;
+
                 for (AccountTunnel tunnel : tunnels.tunnels) {
                     if (tunnel.tunnelType == TunnelType.MinecraftJava) {
                         keys.tunnelAddress = tunnel.displayAddress;
+                        haveJava = true;
                         log.info("found minecraft java tunnel: " + keys.tunnelAddress);
-                        return keys;
+                    }
+                    if (isGeyserPresent && tunnel.tunnelType == TunnelType.MinecraftBedrock) {
+                        haveBedrock = true;
+                        log.info("found minecraft bedrock tunnel: " + tunnel.displayAddress);
                     }
                 }
 
-                log.info("create new minecraft java tunnel");
+                // Always create Java tunnel if not found
+                if (!haveJava) {
+                    log.info("create new minecraft java tunnel");
 
-                var create = new CreateTunnel();
-                create.localIp = "127.0.0.1";
-                create.portCount = 1;
-                create.portType = PortType.TCP;
-                create.tunnelType = TunnelType.MinecraftJava;
-                create.agentId = keys.agentId;
+                    var create = new CreateTunnel();
+                    create.localIp = "127.0.0.1";
+                    create.portCount = 1;
+                    create.portType = PortType.TCP;
+                    create.tunnelType = TunnelType.MinecraftJava;
+                    create.agentId = keys.agentId;
 
-                api.createTunnel(create);
+                    api.createTunnel(create);
+                    return null; // Wait for tunnel to appear
+                }
+
+                // If Geyser is present, ensure a Bedrock UDP tunnel exists
+                if (isGeyserPresent && !haveBedrock) {
+                    log.info("create new minecraft bedrock UDP tunnel on port " + geyserPort);
+                    var create = new CreateTunnel();
+                    create.localIp = "127.0.0.1";
+                    create.localPort = geyserPort;
+                    create.portCount = 1;
+                    create.portType = PortType.UDP;
+                    create.tunnelType = TunnelType.MinecraftBedrock;
+                    create.agentId = keys.agentId;
+                    api.createTunnel(create);
+                    return null; // Wait for tunnel to appear
+                }
+
+                // If we have both required tunnels, setup is done
+                if (haveJava && haveBedrock) {
+                    return keys;
+                }
 
                 return null;
             }

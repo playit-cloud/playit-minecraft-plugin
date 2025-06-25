@@ -19,16 +19,20 @@ public class PlayitManager implements Runnable {
     private final PlayitConnectionTracker tracker = new PlayitConnectionTracker();
 
     private final PlayitBukkit plugin;
+    private final boolean isGeyserPresent;
+    private final int geyserPort;
 
-    public PlayitManager(PlayitBukkit plugin) {
+    public PlayitManager(PlayitBukkit plugin, boolean isGeyserPresent, int geyserPort) {
         this.plugin = plugin;
+        this.isGeyserPresent = isGeyserPresent;
+        this.geyserPort = geyserPort;
 
         var secret = plugin.getConfig().getString(PlayitBukkit.CFG_AGENT_SECRET_KEY);
         if (secret != null && secret.length() < 32) {
             secret = null;
         }
 
-        setup = new PlayitKeysSetup(secret, state);
+        setup = new PlayitKeysSetup(secret, state, isGeyserPresent, geyserPort);
     }
 
     private final PlayitKeysSetup setup;

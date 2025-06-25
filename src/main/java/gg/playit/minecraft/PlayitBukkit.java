@@ -14,6 +14,11 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.plugin.Plugin;
+import org.yaml.snakeyaml.Yaml;
+import java.io.File;
+import java.io.FileInputStream;
+import java.util.Map;
 
 import java.io.IOException;
 import java.util.List;
@@ -31,9 +36,45 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
 
     Server server;
 
+    private boolean isGeyserPresent = false;
+    private int geyserPort = 19132;
+
     @Override
     public void onEnable() {
         server = Bukkit.getServer();
+
+        // Detect Geyser plugin
+        PluginManager pm = Bukkit.getServer().getPluginManager();
+        Plugin geyser = pm.getPlugin("Geyser-Spigot");
+        if (geyser != null && geyser.isEnabled()) {
+            isGeyserPresent = true;
+            // Try to read the port from Geyser config
+            try {
+                File geyserConfig = new File("plugins/Geyser-Spigot/config.yml");
+                if (geyserConfig.exists()) {
+                    Yaml yaml = new Yaml();
+                    try (FileInputStream fis = new FileInputStream(geyserConfig)) {
+                        Map<String, Object> config = yaml.load(fis);
+                        if (config != null && config.containsKey("bedrock")) {
+                            Object bedrockSection = config.get("bedrock");
+                            if (bedrockSection instanceof Map) {
+                                Object portObj = ((Map<?, ?>) bedrockSection).get("port");
+                                if (portObj instanceof Number) {
+                                    geyserPort = ((Number) portObj).intValue();
+                                } else if (portObj instanceof String) {
+                                    try {
+                                        geyserPort = Integer.parseInt((String) portObj);
+                                    } catch (NumberFormatException ignore) {}
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warning("Failed to read Geyser config: " + e.getMessage());
+            }
+            log.info("Geyser detected, Bedrock port: " + geyserPort);
+        }
 
         var command = getCommand("playit");
         if (command != null) {
@@ -50,7 +91,6 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
         resetConnection(secretKey);
 
         try {
-            PluginManager pm = Bukkit.getServer().getPluginManager();
             pm.registerEvents(this, this);
         } catch (Exception e) {
         }
@@ -261,7 +301,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
                 playitManager.shutdown();
             }
 
-            playitManager = new PlayitManager(this);
+            playitManager = new PlayitManager(this, isGeyserPresent, geyserPort);
             try {
                 int waitSeconds = getConfig().getInt(CFG_CONNECTION_TIMEOUT_SECONDS);
                 if (waitSeconds != 0) {
