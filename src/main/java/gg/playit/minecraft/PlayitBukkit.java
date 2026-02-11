@@ -1,8 +1,10 @@
 package gg.playit.minecraft;
 
 import gg.playit.api.ApiClient;
-import gg.playit.api.ApiError;
-import gg.playit.api.models.Notice;
+import gg.playit.api.ApiClientException;
+import gg.playit.api.model.ApiSuccess;
+import gg.playit.api.model.response.AgentNotice;
+import gg.playit.api.model.response.WebSession;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import org.bukkit.Bukkit;
@@ -68,10 +70,12 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
                 player.sendMessage(ChatColor.RED + "WARNING:" + ChatColor.RESET + " your email on playit.gg is not verified");
             }
 
-            Notice notice = manager.getNotice();
+            AgentNotice notice = manager.getNotice();
             if (notice != null) {
-                player.sendMessage(ChatColor.RED + "NOTICE:" + ChatColor.RESET + " " + notice.message);
-                player.sendMessage(ChatColor.RED + "URL:" + ChatColor.RESET + " " + notice.url);
+                player.sendMessage(ChatColor.RED + "NOTICE:" + ChatColor.RESET + " " + notice.message());
+                if (notice.resolve_link() != null) {
+                    player.sendMessage(ChatColor.RED + "URL:" + ChatColor.RESET + " " + notice.resolve_link());
+                }
             }
         }
     }
@@ -228,18 +232,21 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
                 new Thread(() -> {
                     try {
                         var api = new ApiClient(secret);
-                        var session = api.createGuestWebSessionKey();
+                        var result = api.loginGuest();
+                        String session = result instanceof ApiSuccess<WebSession, ?> success ? success.data().session_key() : null;
 
-                        var url = "https://playit.gg/login/guest-account/" + session;
-                        log.info("generated login url: " + url);
+                        if (session != null) {
+                            var url = "https://playit.gg/login/guest-account/" + session;
+                            log.info("generated login url: " + url);
 
-                        sender.sendMessage("generated login url");
-                        sender.sendMessage("URL: " + url);
-                    } catch (ApiError e) {
+                            sender.sendMessage("generated login url");
+                            sender.sendMessage("URL: " + url);
+                        } else {
+                            sender.sendMessage("error: failed to create guest login link");
+                        }
+                    } catch (ApiClientException e) {
                         log.warning("failed to create guest secret: " + e);
                         sender.sendMessage("error: " + e.getMessage());
-                    } catch (IOException e) {
-                        log.severe("failed to create guest secret: " + e);
                     }
                 }).start();
 

@@ -13,14 +13,14 @@ java {
 }
 
 application {
-    mainClass = 'gg.playit.api2.example.ApiExample'
+    mainClass = 'gg.playit.api.example.ApiExample'
 }
 
 tasks.register('runApiExample', JavaExec) {
     group = 'application'
     description = 'Run the API example'
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'gg.playit.api2.example.ApiExample'
+    mainClass = 'gg.playit.api.example.ApiExample'
 }
 
 tasks.register('runControlExample', JavaExec) {

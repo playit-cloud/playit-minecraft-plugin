@@ -1,8 +1,10 @@
 package gg.playit.minecraft;
 
 import gg.playit.api.ApiClient;
-import gg.playit.api.models.Notice;
-import gg.playit.api2.model.request.AgentVersion;
+import gg.playit.api.model.ApiSuccess;
+import gg.playit.api.model.request.AgentVersion;
+import gg.playit.api.model.response.AgentNotice;
+import gg.playit.api.model.response.WebSession;
 import gg.playit.control.PlayitControlChannel;
 import gg.playit.messages.ControlFeedReader;
 import org.bukkit.Bukkit;
@@ -50,7 +52,7 @@ public class PlayitManager implements Runnable {
         return keys.tunnelAddress;
     }
 
-    public Notice getNotice() {
+    public AgentNotice getNotice() {
         var k = keys;
         if (k == null) {
             return null;
@@ -135,7 +137,11 @@ public class PlayitManager implements Runnable {
             var api = new ApiClient(keys.secretKey);
 
             try {
-                var key = api.createGuestWebSessionKey();
+                var result = api.loginGuest();
+                String key = result instanceof ApiSuccess<WebSession, ?> success ? success.data().session_key() : null;
+                if (key == null) {
+                    log.severe("failed to generate web session key: " + result);
+                } else {
                 var url = "https://playit.gg/login/guest-account/" + key;
                 log.info("setup playit.gg account: " + url);
 
@@ -148,6 +154,7 @@ public class PlayitManager implements Runnable {
                         player.sendMessage("setup playit.gg account");
                         player.sendMessage(ChatColor.RED + "URL: " + ChatColor.RESET + url);
                     }
+                }
                 }
             } catch (IOException e) {
                 log.severe("failed to generate web session key: " + e);

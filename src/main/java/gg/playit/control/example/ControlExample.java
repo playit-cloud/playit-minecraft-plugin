@@ -1,6 +1,6 @@
 package gg.playit.control.example;
 
-import gg.playit.api2.model.request.AgentVersion;
+import gg.playit.api.model.request.AgentVersion;
 import gg.playit.control.PlayitControlChannel;
 import gg.playit.messages.ControlFeedReader;
 

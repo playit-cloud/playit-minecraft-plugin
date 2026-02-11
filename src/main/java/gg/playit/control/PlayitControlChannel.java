@@ -1,7 +1,7 @@
 package gg.playit.control;
 
-import gg.playit.api2.ApiClient;
-import gg.playit.api2.model.request.AgentVersion;
+import gg.playit.api.ApiClient;
+import gg.playit.api.model.request.AgentVersion;
 import gg.playit.messages.ControlFeedReader;
 import gg.playit.messages.ControlRequestWriter;
 import gg.playit.messages.DecodeException;

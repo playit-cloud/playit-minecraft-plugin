@@ -1,15 +1,15 @@
 package gg.playit.control;
 
-import gg.playit.api2.ApiClient;
-import gg.playit.api2.ApiClientException;
-import gg.playit.api2.model.ApiResult;
-import gg.playit.api2.model.ApiSuccess;
-import gg.playit.api2.model.enums.Platform;
-import gg.playit.api2.model.request.AgentVersion;
-import gg.playit.api2.model.request.ReqAgentsRoutingGet;
-import gg.playit.api2.model.request.ReqProtoRegister;
-import gg.playit.api2.model.response.AgentRouting;
-import gg.playit.api2.model.response.SignedAgentKey;
+import gg.playit.api.ApiClient;
+import gg.playit.api.ApiClientException;
+import gg.playit.api.model.ApiResult;
+import gg.playit.api.model.ApiSuccess;
+import gg.playit.api.model.enums.Platform;
+import gg.playit.api.model.request.AgentVersion;
+import gg.playit.api.model.request.ReqAgentsRoutingGet;
+import gg.playit.api.model.request.ReqProtoRegister;
+import gg.playit.api.model.response.AgentRouting;
+import gg.playit.api.model.response.SignedAgentKey;
 import gg.playit.messages.ControlFeedReader;
 import gg.playit.messages.ControlRequestWriter;
 import gg.playit.messages.DecodeException;
