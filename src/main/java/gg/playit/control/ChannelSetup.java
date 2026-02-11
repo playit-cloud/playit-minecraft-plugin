@@ -1,37 +1,97 @@
 package gg.playit.control;
 
-import gg.playit.api.ApiClient;
-import gg.playit.api.actions.SignAgentRegister;
+import gg.playit.api2.ApiClient;
+import gg.playit.api2.ApiClientException;
+import gg.playit.api2.model.ApiResult;
+import gg.playit.api2.model.ApiSuccess;
+import gg.playit.api2.model.enums.Platform;
+import gg.playit.api2.model.request.AgentVersion;
+import gg.playit.api2.model.request.ReqAgentsRoutingGet;
+import gg.playit.api2.model.request.ReqProtoRegister;
+import gg.playit.api2.model.response.AgentRouting;
+import gg.playit.api2.model.response.SignedAgentKey;
 import gg.playit.messages.ControlFeedReader;
 import gg.playit.messages.ControlRequestWriter;
 import gg.playit.messages.DecodeException;
 import gg.playit.minecraft.utils.DecoderException;
+import gg.playit.minecraft.utils.Hex;
 
 import java.io.IOException;
 import java.net.*;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.logging.Logger;
 
 public class ChannelSetup {
     public static final int CONTROL_PORT = 5525;
 
+    /** Default Minecraft plugin variant ID (UUID) */
+    private static final String PLUGIN_VARIANT_ID = "308943e8-faef-4835-a2ba-270351f72aa3";
+
+    /** Default agent version when none is provided (0.1.4) */
+    public static final AgentVersion DEFAULT_AGENT_VERSION = new AgentVersion(PLUGIN_VARIANT_ID, 0, 1, 4);
+
     static Logger log = Logger.getLogger(ChannelSetup.class.getName());
 
-    public static FindSuitableChannel start() throws UnknownHostException {
-        InetAddress[] allByName = InetAddress.getAllByName("control.playit.gg");
-        /* prefer IPv6 */
-        Arrays.sort(allByName, Comparator.comparingLong(a -> -a.getAddress().length));
+    /**
+     * Start channel setup using protocol v2. Requires secret key to fetch control addresses via API.
+     *
+     * @param secretKey   the agent secret key
+     * @param agentVersion the agent version for proto register, or null to use {@link #DEFAULT_AGENT_VERSION}
+     */
+    public static FindSuitableChannel start(String secretKey, AgentVersion agentVersion) throws IOException {
+        var apiClient = new ApiClient(secretKey);
+
+        ApiResult<AgentRouting, ?> routingResult;
+        try {
+            routingResult = apiClient.agentsRoutingGet(new ReqAgentsRoutingGet(null));
+        } catch (ApiClientException e) {
+            throw new IOException("failed to get control addresses from API", e);
+        }
+
+        if (!(routingResult instanceof ApiSuccess<AgentRouting, ?> success)) {
+            throw new IOException("agents routing get failed: " + routingResult);
+        }
+
+        var routing = success.data();
+        var addresses = new ArrayList<InetSocketAddress>();
+
+        /* Prefer IPv6 like Rust */
+        if (routing.targets6() != null && !routing.disable_ip6()) {
+            for (var ip : routing.targets6()) {
+                try {
+                    addresses.add(new InetSocketAddress(InetAddress.getByName(ip), CONTROL_PORT));
+                } catch (UnknownHostException e) {
+                    log.warning("failed to parse IPv6 target: " + ip);
+                }
+            }
+        }
+        if (routing.targets4() != null) {
+            for (var ip : routing.targets4()) {
+                try {
+                    addresses.add(new InetSocketAddress(InetAddress.getByName(ip), CONTROL_PORT));
+                } catch (UnknownHostException e) {
+                    log.warning("failed to parse IPv4 target: " + ip);
+                }
+            }
+        }
+
+        if (addresses.isEmpty()) {
+            throw new IOException("no control addresses returned from API");
+        }
 
         var setup = new FindSuitableChannel();
-        setup.options = allByName;
+        setup.options = addresses.toArray(new InetSocketAddress[0]);
+        setup.apiClient = apiClient;
+        setup.agentVersion = agentVersion != null ? agentVersion : DEFAULT_AGENT_VERSION;
         return setup;
     }
 
     public static class FindSuitableChannel {
-        private InetAddress[] options;
+        private InetSocketAddress[] options;
+        private ApiClient apiClient;
+        private AgentVersion agentVersion;
 
         public SetupRequireAuthentication findChannel() throws IOException {
             var socket = new DatagramSocket();
@@ -42,20 +102,20 @@ public class ChannelSetup {
             var buffer = ByteBuffer.allocate(1024);
             {
                 var builder = ControlRequestWriter.requestId(buffer, 1);
-                builder.ping(0, null);
+                builder.ping(System.currentTimeMillis(), null);
             }
             var bytesWritten = buffer.position();
 
             for (var option : options) {
                 for (var i = 0; i < 3; ++i) {
                     try {
-                        var packet = new DatagramPacket(buffer.array(), 0, bytesWritten, new InetSocketAddress(option, CONTROL_PORT));
+                        var packet = new DatagramPacket(buffer.array(), 0, bytesWritten, option);
                         socket.send(packet);
 
                         DatagramPacket rxPacket = new DatagramPacket(new byte[1024], 0, 1024);
                         socket.receive(rxPacket);
 
-                        if (!Arrays.equals(rxPacket.getAddress().getAddress(), option.getAddress()) || rxPacket.getPort() != CONTROL_PORT) {
+                        if (!rxPacket.getAddress().equals(option.getAddress()) || rxPacket.getPort() != option.getPort()) {
                             log.warning("got response from unexpected source: " + rxPacket.getAddress() + ", port: " + rxPacket.getPort());
                             continue;
                         }
@@ -68,7 +128,10 @@ public class ChannelSetup {
                                 var next = new SetupRequireAuthentication();
                                 next.pong = (ControlFeedReader.Pong) message;
                                 next.socket = socket;
-                                next.address = option;
+                                next.address = option.getAddress();
+                                next.port = option.getPort();
+                                next.apiClient = apiClient;
+                                next.agentVersion = agentVersion;
                                 return next;
                             } else {
                                 log.warning("expected pong response but got: " + message);
@@ -95,6 +158,9 @@ public class ChannelSetup {
         private ControlFeedReader.Pong pong;
         private DatagramSocket socket;
         private InetAddress address;
+        private int port;
+        private ApiClient apiClient;
+        private AgentVersion agentVersion;
 
         @Override
         public String toString() {
@@ -110,23 +176,35 @@ public class ChannelSetup {
                 throw new IOException("already used");
             }
 
-            var registerRequest = ByteBuffer.allocate(1024);
-
+            byte[] registerBytes;
             try {
-                var client = new ApiClient(secretKey);
-                var req = new SignAgentRegister();
-                req.agentVersion = 10_001;
-                req.clientAddr = this.pong.clientAddr;
-                req.tunnelAddr = this.pong.tunnelAddr;
-                var data = client.getSignedAgentRegisterData(req);
-                ControlRequestWriter.requestId(registerRequest, 100).registerBytes(data);
+                var req = new ReqProtoRegister(
+                        null,
+                        2L,
+                        agentVersion,
+                        Platform.MinecraftPlugin,
+                        pong.clientAddr.toString(),
+                        pong.tunnelAddr.toString()
+                );
+                var result = apiClient.protoRegister(req);
+
+                if (!(result instanceof ApiSuccess<SignedAgentKey, ?> success)) {
+                    throw new IOException("proto register failed: " + result);
+                }
+
+                registerBytes = Hex.decodeHex(success.data().key());
             } catch (DecoderException e) {
-                throw new IOException("failed parse hex response from server", e);
+                throw new IOException("failed to decode hex response from server", e);
+            } catch (ApiClientException e) {
+                throw new IOException("proto register API error", e);
             }
+
+            var registerRequest = ByteBuffer.allocate(1024 + registerBytes.length);
+            ControlRequestWriter.requestId(registerRequest, 100).registerBytes(registerBytes);
 
             var packet = new DatagramPacket(registerRequest.array(), registerRequest.arrayOffset(), registerRequest.position());
             packet.setAddress(this.address);
-            packet.setPort(CONTROL_PORT);
+            packet.setPort(this.port);
 
             for (int i = 0; i < 4; i++) {
                 this.socket.send(packet);
@@ -142,9 +220,10 @@ public class ChannelSetup {
 
                         if (response instanceof ControlFeedReader.AgentRegistered registered) {
                             var channel = new PlayitControlChannel();
-                            channel.apiClient = new ApiClient(secretKey);
+                            channel.apiClient = apiClient;
                             channel.socket = this.socket;
                             channel.controlAddress = this.address;
+                            channel.controlPort = this.port;
                             channel.registered = registered;
                             channel.ogPong = this.pong;
                             channel.latestPong = this.pong;

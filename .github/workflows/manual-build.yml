@@ -14,9 +14,9 @@ jobs:
           java-version: '18'
           distribution: 'adopt'
       - name: Build Package
-        run: mvn --batch-mode package
+        run: ./gradlew shadowJar
       - name: Upload jar
         uses: actions/upload-artifact@v3
         with:
           name: playit-minecraft-plugin.jar
-          path: ./target/playit-minecraft-plugin.jar
+          path: ./build/libs/playit-minecraft-plugin.jar

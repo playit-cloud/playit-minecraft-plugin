@@ -2,6 +2,7 @@ package gg.playit.minecraft;
 
 import gg.playit.api.ApiClient;
 import gg.playit.api.models.Notice;
+import gg.playit.api2.model.request.AgentVersion;
 import gg.playit.control.PlayitControlChannel;
 import gg.playit.messages.ControlFeedReader;
 import org.bukkit.Bukkit;
@@ -163,9 +164,10 @@ public class PlayitManager implements Runnable {
         }
 
         state.set(STATE_CONNECTING);
+        var version = new AgentVersion("f4e73f52-f35c-4f18-9ab2-3aaa5c4488c1", 0, 2, 0);
 
         while (state.get() == STATE_CONNECTING) {
-            try (PlayitControlChannel channel = PlayitControlChannel.setup(keys.secretKey)) {
+            try (PlayitControlChannel channel = PlayitControlChannel.setup(keys.secretKey, version)) {
                 state.compareAndSet(STATE_CONNECTING, STATE_ONLINE);
 
                 while (state.get() == STATE_ONLINE) {

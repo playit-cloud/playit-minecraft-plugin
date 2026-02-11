@@ -1,0 +1,54 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'gg.playit.gg'
+version = '0.1.4'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+application {
+    mainClass = 'gg.playit.api2.example.ApiExample'
+}
+
+tasks.register('runApiExample', JavaExec) {
+    group = 'application'
+    description = 'Run the API example'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'gg.playit.api2.example.ApiExample'
+}
+
+tasks.register('runControlExample', JavaExec) {
+    group = 'application'
+    description = 'Run the control channel example'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'gg.playit.control.example.ControlExample'
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/public/' }
+    maven { url = 'https://repo.dmulloy2.net/repository/public/' }
+}
+
+dependencies {
+    implementation 'commons-io:commons-io:2.11.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.0-rc1'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.14.0-rc1'
+
+    compileOnly 'io.netty:netty-all:4.1.82.Final'
+    compileOnly 'org.spigotmc:spigot-api:1.16.5-R0.1-SNAPSHOT'
+}
+
+shadowJar {
+    archiveBaseName.set('playit-minecraft-plugin')
+    archiveClassifier.set('')
+    archiveVersion.set('')
+}
+
+build.dependsOn shadowJar
