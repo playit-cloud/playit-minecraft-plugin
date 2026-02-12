@@ -31,22 +31,57 @@ public class ReflectionHelper {
     private final Class<?> CraftServer;
 
     public ReflectionHelper() {
-        ServerConnection = cls("net.minecraft.server.network.ServerConnection");
-        LegacyPingHandler = cls("net.minecraft.server.network.LegacyPingHandler");
+        this(null);
+    }
+
+    public ReflectionHelper(Server server) {
+        ServerConnection = cls(
+                "net.minecraft.server.network.ServerConnection",
+                "net.minecraft.server.network.ServerConnectionListener");
+        LegacyPingHandler = cls(
+                "net.minecraft.server.network.LegacyPingHandler",
+                "net.minecraft.server.network.LegacyQueryHandler");
         MinecraftServer = cls("net.minecraft.server.MinecraftServer");
-        PacketSplitter = cls("net.minecraft.network.PacketSplitter");
+        PacketSplitter = cls(
+                "net.minecraft.network.PacketSplitter",
+                "net.minecraft.network.Varint21FrameDecoder");
         PacketDecoder = cls("net.minecraft.network.PacketDecoder");
-        EnumProtocolDirection = cls("net.minecraft.network.protocol.EnumProtocolDirection");
-        PacketPrepender = cls("net.minecraft.network.PacketPrepender");
+        EnumProtocolDirection = cls(
+                "net.minecraft.network.protocol.EnumProtocolDirection",
+                "net.minecraft.network.protocol.ConnectionProtocol");
+        PacketPrepender = cls(
+                "net.minecraft.network.PacketPrepender",
+                "net.minecraft.network.Varint21LengthFieldPrepender");
         PacketEncoder = cls("net.minecraft.network.PacketEncoder");
-        NetworkManagerServer = cls("net.minecraft.network.NetworkManagerServer");
-        NetworkManager = cls("net.minecraft.network.NetworkManager");
-        HandshakeListener = cls("net.minecraft.server.network.HandshakeListener");
+        NetworkManagerServer = cls(
+                "net.minecraft.network.NetworkManagerServer",
+                "net.minecraft.network.RateKickingConnection");
+        NetworkManager = cls(
+                "net.minecraft.network.NetworkManager",
+                "net.minecraft.network.Connection");
+        HandshakeListener = cls(
+                "net.minecraft.server.network.HandshakeListener",
+                "net.minecraft.server.network.ServerHandshakePacketListenerImpl");
         PacketListener = cls("net.minecraft.network.PacketListener");
-        CraftServer = cls(
+        CraftServer = resolveCraftServer(server);
+    }
+
+    private static Class<?> resolveCraftServer(Server server) {
+        if (server != null) {
+            String pkg = server.getClass().getPackage().getName();
+            if (pkg.startsWith("org.bukkit.craftbukkit")) {
+                Class<?> c = cls(pkg + ".CraftServer");
+                if (c != null) return c;
+            }
+        }
+        return cls(
                 "org.bukkit.craftbukkit.CraftServer",
-                "org.bukkit.craftbukkit.v1_19_R1.CraftServer"
-        );
+                "org.bukkit.craftbukkit.v1_21_R1.CraftServer",
+                "org.bukkit.craftbukkit.v1_20_R3.CraftServer",
+                "org.bukkit.craftbukkit.v1_20_R1.CraftServer",
+                "org.bukkit.craftbukkit.v1_19_R3.CraftServer",
+                "org.bukkit.craftbukkit.v1_19_R1.CraftServer",
+                "org.bukkit.craftbukkit.v1_16_R3.CraftServer");
     }
 
     static Class<?> cls(String className) {
@@ -123,17 +158,30 @@ public class ReflectionHelper {
             log.warning("failed set field connections, error: " + e);
         }
 
+        try {
+            Method getConnections = searchMethod(ServerConnection, "getConnections");
+            getConnections.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            List<Object> list = (List<Object>) getConnections.invoke(serverConnection);
+            if (list != null) {
+                list.add(networkManager);
+                return true;
+            }
+        } catch (Exception e) {
+            log.warning("failed to add via getConnections(), error: " + e);
+        }
+
         HashSet<Object> potentialFieldObjects = new HashSet<>();
 
         var search = ServerConnection;
         while (search != null) {
-            for (var field : ServerConnection.getDeclaredFields()) {
+            for (var field : search.getDeclaredFields()) {
                 if (List.class.isAssignableFrom(field.getType())) {
                     if (field.getGenericType() instanceof ParameterizedType parameterizedType) {
                         var type = parameterizedType.getActualTypeArguments()[0];
                         var typeClass = cls(type.getTypeName());
 
-                        if (typeClass != null && NetworkManager.isAssignableFrom(typeClass)) {
+                        if (typeClass != null && NetworkManager != null && NetworkManager.isAssignableFrom(typeClass)) {
                             try {
                                 field.setAccessible(true);
                                 potentialFieldObjects.add(field.get(serverConnection));
@@ -149,13 +197,14 @@ public class ReflectionHelper {
         if (potentialFieldObjects.size() == 1) {
             var found = potentialFieldObjects.toArray()[0];
             try {
-                var list = (List) found;
+                @SuppressWarnings("unchecked")
+                var list = (List<Object>) found;
                 list.add(networkManager);
                 return true;
             } catch (Exception e) {
                 log.warning("failed to add connection to " + found + ", error: " + e);
             }
-        } else {
+        } else if (potentialFieldObjects.size() > 1) {
             log.warning("multiple connection lists: " + potentialFieldObjects);
         }
 
@@ -163,15 +212,21 @@ public class ReflectionHelper {
     }
 
     public Object newHandshakeListener(Object minecraftServer, Object networkManager) {
-        if (HandshakeListener == null) {
+        if (HandshakeListener == null || MinecraftServer == null) {
             return null;
         }
 
         try {
             return HandshakeListener.getConstructor(MinecraftServer, NetworkManager).newInstance(minecraftServer, networkManager);
-        } catch (Exception e) {
-            return null;
+        } catch (Exception ignored) {
         }
+
+        try {
+            return HandshakeListener.getConstructor(MinecraftServer, Class.forName("net.minecraft.network.Connection")).newInstance(minecraftServer, networkManager);
+        } catch (Exception ignored) {
+        }
+
+        return null;
     }
 
     public boolean setRemoteAddress(Channel channel, SocketAddress address) {
@@ -247,9 +302,15 @@ public class ReflectionHelper {
         try {
             return LegacyPingHandler.getConstructor(ServerConnection).newInstance(serverConnection);
         } catch (NoSuchMethodException | InvocationTargetException | InstantiationException |
-                 IllegalAccessException e) {
-            return null;
+                 IllegalAccessException ignored) {
         }
+
+        try {
+            return LegacyPingHandler.getConstructor(Class.forName("net.minecraft.server.network.ServerConnectionListener")).newInstance(serverConnection);
+        } catch (Exception ignored) {
+        }
+
+        return null;
     }
 
     public Object newPacketSplitter() {
@@ -326,27 +387,33 @@ public class ReflectionHelper {
     }
 
     private Object serverBound() {
-        if (EnumProtocolDirection == null) {
-            return null;
+        for (Class<?> enumClass : new Class<?>[]{
+                EnumProtocolDirection,
+                cls("net.minecraft.network.protocol.PacketFlow")
+        }) {
+            if (enumClass != null) {
+                try {
+                    return Enum.valueOf((Class<Enum>) enumClass, "SERVERBOUND");
+                } catch (Exception ignored) {
+                }
+            }
         }
-
-        try {
-            return Enum.valueOf((Class<Enum>) EnumProtocolDirection, "SERVERBOUND");
-        } catch (Exception e) {
-            return null;
-        }
+        return null;
     }
 
     private Object clientBound() {
-        if (EnumProtocolDirection == null) {
-            return null;
+        for (Class<?> enumClass : new Class<?>[]{
+                EnumProtocolDirection,
+                cls("net.minecraft.network.protocol.PacketFlow")
+        }) {
+            if (enumClass != null) {
+                try {
+                    return Enum.valueOf((Class<Enum>) enumClass, "CLIENTBOUND");
+                } catch (Exception ignored) {
+                }
+            }
         }
-
-        try {
-            return Enum.valueOf((Class<Enum>) EnumProtocolDirection, "CLIENTBOUND");
-        } catch (Exception e) {
-            return null;
-        }
+        return null;
     }
 
     public Object getMinecraftServer(Server server) {
@@ -400,16 +467,19 @@ public class ReflectionHelper {
         }
 
         try {
-            var field = MinecraftServer.getDeclaredField("connection");
+            Field field = searchForFieldByName(MinecraftServer, "connection");
             field.setAccessible(true);
             var res = field.get(object);
-            if (ServerConnection.isInstance(res)) {
+            if (ServerConnection != null && ServerConnection.isInstance(res)) {
                 return res;
             }
-        } catch (Exception e) {
+        } catch (Exception ignored) {
         }
 
-        return searchForAttribute(MinecraftServer, ServerConnection, object);
+        if (ServerConnection != null) {
+            return searchForAttribute(MinecraftServer, ServerConnection, object);
+        }
+        return null;
     }
 
     public Method searchMethod(Class<?> subject, String name, Class<?>... parameterTypes) throws NoSuchMethodException {

@@ -177,7 +177,7 @@ public class PlayitTcpTunnel {
         }
 
         private boolean addChannelToMinecraftServer() {
-            ReflectionHelper reflect = new ReflectionHelper();
+            ReflectionHelper reflect = new ReflectionHelper(server);
             log.info("Reflect: " + reflect);
 
             Object minecraftServer = reflect.getMinecraftServer(server);
