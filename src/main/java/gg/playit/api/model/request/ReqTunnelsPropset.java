@@ -1,6 +1,7 @@
 package gg.playit.api.model.request;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record ReqTunnelsPropset(String tunnel_id, PropsetDetails details) {}
+public record ReqTunnelsPropset(@NotNull String tunnel_id, @NotNull PropsetDetails details) {}

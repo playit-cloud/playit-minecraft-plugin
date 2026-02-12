@@ -1,6 +1,7 @@
 package gg.playit.api.model.request;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record ReqTunnelsFirewallAssign(String tunnel_id, String firewall_id) {}
+public record ReqTunnelsFirewallAssign(@NotNull String tunnel_id, String firewall_id) {}

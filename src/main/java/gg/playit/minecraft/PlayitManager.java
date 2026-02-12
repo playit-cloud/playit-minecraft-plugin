@@ -2,8 +2,20 @@ package gg.playit.minecraft;
 
 import gg.playit.api.ApiClient;
 import gg.playit.api.model.ApiSuccess;
-import gg.playit.api.model.request.AgentVersion;
+import gg.playit.api.model.ApiSuccessNoFail;
+import gg.playit.api.model.enums.PlayitNetwork;
+import gg.playit.api.model.enums.TunnelType;
+import gg.playit.api.model.request.AccountTunnelOriginCreate;
+import gg.playit.api.model.request.AgentOrigin;
+import gg.playit.api.model.request.CreateTunnelEndpoint;
+import gg.playit.api.model.request.ReqTunnelsCreateV1;
+import gg.playit.api.model.request.TunnelProtocol;
+import gg.playit.api.model.request.UseAllocRegion;
+import gg.playit.api.model.response.AccountTunnelV1;
+import gg.playit.api.model.response.AccountTunnelsV1;
 import gg.playit.api.model.response.AgentNotice;
+import gg.playit.api.model.response.AgentTunnelConfig;
+import gg.playit.api.model.response.ConnectAddress;
 import gg.playit.api.model.response.WebSession;
 import gg.playit.control.PlayitControlChannel;
 import gg.playit.messages.ControlFeedReader;
@@ -13,6 +25,7 @@ import org.bukkit.ChatColor;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
@@ -31,7 +44,7 @@ public class PlayitManager implements Runnable {
             secret = null;
         }
 
-        setup = new PlayitKeysSetup(secret, state);
+        setup = new PlayitKeysSetup(secret, state, PlayitConstants.VERSION_STRING);
     }
 
     private final PlayitKeysSetup setup;
@@ -88,8 +101,19 @@ public class PlayitManager implements Runnable {
             try {
                 keys = setup.progress();
 
+                if (state.get() == PlayitKeysSetup.STATE_CHECKING_SECRET) {
+                    var currentKeys = setup.getKeys();
+                    if (currentKeys != null && currentKeys.secretKey != null) {
+                        var savedSecret = plugin.getConfig().getString(PlayitBukkit.CFG_AGENT_SECRET_KEY);
+                        if (!currentKeys.secretKey.equals(savedSecret)) {
+                            plugin.getConfig().set(PlayitBukkit.CFG_AGENT_SECRET_KEY, currentKeys.secretKey);
+                            plugin.saveConfig();
+                        }
+                    }
+                }
+
                 if (keys != null) {
-                    log.info("keys and tunnel setup");
+                    log.info("keys setup complete, ready to connect");
                     break;
                 }
             } catch (IOException e) {
@@ -127,8 +151,11 @@ public class PlayitManager implements Runnable {
             return;
         }
 
-        plugin.getConfig().set(PlayitBukkit.CFG_AGENT_SECRET_KEY, keys.secretKey);
-        plugin.saveConfig();
+        var savedSecret = plugin.getConfig().getString(PlayitBukkit.CFG_AGENT_SECRET_KEY);
+        if (keys.secretKey != null && !keys.secretKey.equals(savedSecret)) {
+            plugin.getConfig().set(PlayitBukkit.CFG_AGENT_SECRET_KEY, keys.secretKey);
+            plugin.saveConfig();
+        }
 
         if (keys.isGuest) {
             plugin.broadcast(ChatColor.RED + "WARNING: " + ChatColor.RESET + " plugin is running with a guest account");
@@ -163,19 +190,21 @@ public class PlayitManager implements Runnable {
             plugin.broadcast(ChatColor.RED + "WARNING: " + ChatColor.RESET + "email associated with playit.gg account is not verified");
         }
 
-        plugin.broadcast("tunnel setup");
-        plugin.broadcast(keys.tunnelAddress);
-
         if (state.get() == STATE_SHUTDOWN) {
             return;
         }
 
         state.set(STATE_CONNECTING);
-        var version = new AgentVersion("f4e73f52-f35c-4f18-9ab2-3aaa5c4488c1", 0, 2, 0);
 
         while (state.get() == STATE_CONNECTING) {
-            try (PlayitControlChannel channel = PlayitControlChannel.setup(keys.secretKey, version)) {
+            try (PlayitControlChannel channel = PlayitControlChannel.setup(keys.secretKey, PlayitConstants.MINECRAFT_AGENT_VERSION)) {
                 state.compareAndSet(STATE_CONNECTING, STATE_ONLINE);
+
+                keys.tunnelAddress = ensureTunnelExists(keys);
+                if (keys.tunnelAddress != null) {
+                    plugin.broadcast("tunnel setup");
+                    plugin.broadcast(keys.tunnelAddress);
+                }
 
                 while (state.get() == STATE_ONLINE) {
                     var messageOpt = channel.update();
@@ -232,5 +261,81 @@ public class PlayitManager implements Runnable {
                 }
             }
         }
+    }
+
+    private String ensureTunnelExists(PlayitKeysSetup.PlayitKeys keys) throws IOException {
+        var api = new ApiClient(keys.secretKey);
+
+        var tunnelsResult = api.v1TunnelsList();
+        if (!(tunnelsResult instanceof ApiSuccessNoFail<AccountTunnelsV1> tunnelsSuccess)) {
+            throw new IOException("tunnels list failed: " + tunnelsResult);
+        }
+        var tunnels = tunnelsSuccess.data();
+
+        if (tunnels.tunnels() != null) {
+            for (AccountTunnelV1 tunnel : tunnels.tunnels()) {
+                if (tunnel.tunnel_type() == TunnelType.MinecraftJava) {
+                    var addr = extractDisplayAddress(tunnel);
+                    if (addr != null) {
+                        log.info("found minecraft java tunnel: " + addr);
+                        return addr;
+                    }
+                }
+            }
+        }
+
+        log.info("create new minecraft java tunnel");
+
+        var create = new ReqTunnelsCreateV1(
+                "Minecraft",
+                new TunnelProtocol.TunnelTypeDetail(TunnelType.MinecraftJava),
+                new AccountTunnelOriginCreate.Agent(new AgentOrigin(keys.agentId, new AgentTunnelConfig())),
+                new CreateTunnelEndpoint.Region(new UseAllocRegion(PlayitNetwork.Global, null)),
+                true,
+                null
+        );
+
+        api.v1TunnelsCreate(create);
+
+        for (int i = 0; i < 10; i++) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("interrupted while waiting for tunnel", e);
+            }
+
+            tunnelsResult = api.v1TunnelsList();
+            if (tunnelsResult instanceof ApiSuccessNoFail<AccountTunnelsV1> tunnelsSuccess2) {
+                var tunnelList = tunnelsSuccess2.data().tunnels();
+                if (tunnelList != null) {
+                    for (AccountTunnelV1 tunnel : tunnelList) {
+                        if (tunnel.tunnel_type() == TunnelType.MinecraftJava) {
+                            var addr = extractDisplayAddress(tunnel);
+                            if (addr != null) {
+                                log.info("found minecraft java tunnel: " + addr);
+                                return addr;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        log.warning("tunnel creation may have failed, address unavailable");
+        return null;
+    }
+
+    private static String extractDisplayAddress(AccountTunnelV1 tunnel) {
+        List<ConnectAddress> addrs = tunnel.connect_addresses();
+        if (addrs == null || addrs.isEmpty()) return null;
+        var first = addrs.get(0);
+        if (first instanceof ConnectAddress.Ip4 ip4) return ip4.value().address() + ":" + ip4.value().default_port();
+        if (first instanceof ConnectAddress.Ip6 ip6) return ip6.value().address() + ":" + ip6.value().default_port();
+        if (first instanceof ConnectAddress.Addr4 addr4) return addr4.value().address();
+        if (first instanceof ConnectAddress.Addr6 addr6) return addr6.value().address();
+        if (first instanceof ConnectAddress.Auto auto) return auto.value().address();
+        if (first instanceof ConnectAddress.Domain domain) return domain.value().address();
+        return null;
     }
 }

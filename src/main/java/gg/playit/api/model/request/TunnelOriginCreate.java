@@ -3,6 +3,7 @@ package gg.playit.api.model.request;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
@@ -12,7 +13,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = TunnelOriginCreate.Managed.class, name = "managed")
 })
 public sealed interface TunnelOriginCreate permits TunnelOriginCreate.Default, TunnelOriginCreate.Agent, TunnelOriginCreate.Managed {
-    record Default(AssignedDefaultCreate data) implements TunnelOriginCreate {}
-    record Agent(AssignedAgentCreate data) implements TunnelOriginCreate {}
-    record Managed(AssignedManagedCreate data) implements TunnelOriginCreate {}
+    record Default(@NotNull AssignedDefaultCreate data) implements TunnelOriginCreate {}
+    record Agent(@NotNull AssignedAgentCreate data) implements TunnelOriginCreate {}
+    record Managed(@NotNull AssignedManagedCreate data) implements TunnelOriginCreate {}
 }

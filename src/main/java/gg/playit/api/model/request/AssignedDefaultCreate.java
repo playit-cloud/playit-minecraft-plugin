@@ -1,6 +1,7 @@
 package gg.playit.api.model.request;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record AssignedDefaultCreate(String local_ip, Integer local_port) {}
+public record AssignedDefaultCreate(@NotNull String local_ip, Integer local_port) {}

@@ -1,6 +1,7 @@
 package gg.playit.api.model.request;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record ReqLoginResetPassword(String email, String reset_code, String new_password) {}
+public record ReqLoginResetPassword(@NotNull String email, @NotNull String reset_code, @NotNull String new_password) {}

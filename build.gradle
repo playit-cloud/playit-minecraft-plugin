@@ -5,11 +5,52 @@ plugins {
 }
 
 group = 'gg.playit.gg'
-version = '0.1.4'
+version = '0.2.0'
+
+def generatedVersionDir = file("${buildDir}/generated/sources/playit-version")
+
+tasks.register('generatePlayitConstants') {
+    def versionStr = project.version.toString()
+    def baseVersion = versionStr.split('-')[0]
+    def parts = baseVersion.split('\\.')
+    def major = parts.length > 0 ? (parts[0].replaceAll('[^0-9]', '') ?: '0') : '0'
+    def minor = parts.length > 1 ? (parts[1].replaceAll('[^0-9]', '') ?: '0') : '0'
+    def patch = parts.length > 2 ? (parts[2].replaceAll('[^0-9].*', '') ?: '0') : '0'
+
+    def outputDir = file("$generatedVersionDir/java/gg/playit/minecraft")
+    def outputFile = file("$outputDir/PlayitConstants.java")
+
+    outputs.file(outputFile)
+
+    doLast {
+        outputDir.mkdirs()
+        outputFile.text = """package gg.playit.minecraft;
+
+import gg.playit.api.model.request.AgentVersion;
+
+public final class PlayitConstants {
+    private PlayitConstants() {}
+
+    public static final AgentVersion MINECRAFT_AGENT_VERSION =
+            new AgentVersion("f4e73f52-f35c-4f18-9ab2-3aaa5c4488c1", ${major}, ${minor}, ${patch});
+
+    /** Version string for ReqClaimSetup (e.g. "0.2.0") */
+    public static final String VERSION_STRING = "${versionStr}";
+}
+"""
+    }
+}
+
+sourceSets.main.java.srcDir generatedVersionDir
+compileJava.dependsOn generatePlayitConstants
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
+}
+
+processResources {
+    expand(version: project.version)
 }
 
 application {
@@ -36,7 +77,12 @@ repositories {
     maven { url = 'https://repo.dmulloy2.net/repository/public/' }
 }
 
+jar {
+    enabled = false
+}
+
 dependencies {
+    implementation 'jakarta.validation:jakarta.validation-api:3.0.2'
     implementation 'commons-io:commons-io:2.11.0'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.0-rc1'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.14.0-rc1'
@@ -48,7 +94,7 @@ dependencies {
 shadowJar {
     archiveBaseName.set('playit-minecraft-plugin')
     archiveClassifier.set('')
-    archiveVersion.set('')
+    archiveVersion.set(project.version as String)
 }
 
 build.dependsOn shadowJar

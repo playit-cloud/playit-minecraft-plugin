@@ -17,7 +17,6 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.logging.Logger;
 

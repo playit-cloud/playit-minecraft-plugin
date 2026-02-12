@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import gg.playit.api.model.enums.PlayitNetwork;
 import gg.playit.api.model.enums.PlayitPop;
+import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
@@ -15,6 +16,6 @@ import gg.playit.api.model.enums.PlayitPop;
 })
 public sealed interface AgentRoutingTarget permits AgentRoutingTarget.Automatic, AgentRoutingTarget.Pop, AgentRoutingTarget.Region {
     record Automatic(Object details) implements AgentRoutingTarget {}
-    record Pop(PlayitPop details) implements AgentRoutingTarget {}
-    record Region(PlayitNetwork details) implements AgentRoutingTarget {}
+    record Pop(@NotNull PlayitPop details) implements AgentRoutingTarget {}
+    record Region(@NotNull PlayitNetwork details) implements AgentRoutingTarget {}
 }

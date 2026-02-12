@@ -34,5 +34,17 @@ Contributions welcome!
 
 
 
-### Other Links
+## Developer
+
+### Building the plugin
+
+Requires Java 17+ and [Gradle](https://gradle.org/).
+
+```bash
+./gradlew build
+```
+
+The Minecraft plugin jar is written to `build/libs/playit-minecraft-plugin-$VERSION.jar` (e.g. `playit-minecraft-plugin-0.2.0.jar`). This fat jar includes all dependencies and is ready to drop into your server's `plugins` folder. Only this JAR is produced; use it for deployment.
+
+### Other links
 * https://www.spigotmc.org/resources/playit-gg.105566/

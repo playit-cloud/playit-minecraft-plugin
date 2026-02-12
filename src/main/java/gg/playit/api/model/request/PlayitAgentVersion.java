@@ -1,6 +1,7 @@
 package gg.playit.api.model.request;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record PlayitAgentVersion(AgentVersionOld version, Long proto_version) {}
+public record PlayitAgentVersion(@NotNull AgentVersionOld version, Long proto_version) {}

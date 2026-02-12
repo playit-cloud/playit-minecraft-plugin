@@ -2,6 +2,7 @@ package gg.playit.api.model.request;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import gg.playit.api.model.enums.Platform;
+import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ReqProtoRegister(
@@ -9,6 +10,6 @@ public record ReqProtoRegister(
     Long proto_version,
     AgentVersion version,
     Platform platform,
-    String client_addr,
-    String tunnel_addr
+    @NotNull String client_addr,
+    @NotNull String tunnel_addr
 ) {}

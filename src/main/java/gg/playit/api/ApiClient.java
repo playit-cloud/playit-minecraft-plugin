@@ -1,5 +1,6 @@
 package gg.playit.api;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -24,7 +25,9 @@ public class ApiClient {
     public ApiClient(String agentSecret) {
         this.client = HttpClient.newHttpClient();
         this.agentSecret = agentSecret;
-        this.mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        this.mapper = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .setSerializationInclusion(JsonInclude.Include.NON_NULL);
     }
 
     public ApiResultNoFail<AccountTunnelsV1> v1TunnelsList() throws ApiClientException {

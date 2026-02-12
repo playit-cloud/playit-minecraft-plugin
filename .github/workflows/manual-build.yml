@@ -15,8 +15,11 @@ jobs:
           distribution: 'adopt'
       - name: Build Package
         run: ./gradlew shadowJar
+      - name: Get JAR path
+        id: jar
+        run: echo "path=$(ls ./build/libs/playit-minecraft-plugin-*.jar)" >> $GITHUB_OUTPUT
       - name: Upload jar
         uses: actions/upload-artifact@v3
         with:
           name: playit-minecraft-plugin.jar
-          path: ./build/libs/playit-minecraft-plugin.jar
+          path: ${{ steps.jar.outputs.path }}

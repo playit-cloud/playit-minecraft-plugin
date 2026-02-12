@@ -3,6 +3,7 @@ package gg.playit.api.model.request;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
@@ -12,7 +13,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = TunnelCreateUseAllocation.Region.class, name = "region")
 })
 public sealed interface TunnelCreateUseAllocation permits TunnelCreateUseAllocation.DedicatedIp, TunnelCreateUseAllocation.PortAllocation, TunnelCreateUseAllocation.Region {
-    record DedicatedIp(UseAllocDedicatedIp details) implements TunnelCreateUseAllocation {}
-    record PortAllocation(UseAllocPortAlloc details) implements TunnelCreateUseAllocation {}
-    record Region(UseRegion details) implements TunnelCreateUseAllocation {}
+    record DedicatedIp(@NotNull UseAllocDedicatedIp details) implements TunnelCreateUseAllocation {}
+    record PortAllocation(@NotNull UseAllocPortAlloc details) implements TunnelCreateUseAllocation {}
+    record Region(@NotNull UseRegion details) implements TunnelCreateUseAllocation {}
 }
