@@ -186,6 +186,47 @@ public class ReflectionHelper {
         }
     }
 
+    /**
+     * Sets the address field on Minecraft's Connection/NetworkManager object.
+     * This is the source of truth for Player.getAddress() and works across
+     * Minecraft versions (NetworkManager pre-1.20, Connection 1.20+) and
+     * Java 17+ where Netty's AbstractChannel.remoteAddress reflection fails.
+     */
+    public boolean setConnectionAddress(Object networkManager, SocketAddress address) {
+        if (networkManager == null) {
+            return false;
+        }
+        Class<?> connClass = networkManager.getClass();
+
+        try {
+            Field field = searchForFieldByName(connClass, "address");
+            if (SocketAddress.class.isAssignableFrom(field.getType())) {
+                field.setAccessible(true);
+                field.set(networkManager, address);
+                return true;
+            }
+        } catch (NoSuchFieldException ignored) {
+        } catch (Exception e) {
+            log.warning("failed to set connection address via 'address' field, error: " + e);
+        }
+
+        var options = searchForFieldByType(connClass, SocketAddress.class);
+        if (options.size() == 1) {
+            try {
+                Field field = options.get(0);
+                field.setAccessible(true);
+                field.set(networkManager, address);
+                return true;
+            } catch (Exception e) {
+                log.warning("failed to set connection address via type search, error: " + e);
+            }
+        } else if (options.size() > 1) {
+            log.warning("multiple SocketAddress fields on " + connClass + ", cannot set address");
+        }
+
+        return false;
+    }
+
     public Integer getRateLimitFromMCServer(Object server) {
         if (MinecraftServer == null) {
             return null;

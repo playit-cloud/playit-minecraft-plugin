@@ -283,6 +283,9 @@ public class PlayitTcpTunnel {
             }
 
             tunnelChannel.pipeline().fireChannelActive();
+            if (!reflect.setConnectionAddress(networkManager, trueIp)) {
+                log.warning("failed to set connection address to " + trueIp);
+            }
             return true;
         }
     }
