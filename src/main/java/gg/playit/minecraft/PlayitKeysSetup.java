@@ -78,6 +78,7 @@ public class PlayitKeysSetup {
                     new Random().nextBytes(array);
                     claimCode = Hex.encodeHexString(array);
                     log.info("secret key not set, generate claim code: " + claimCode);
+                    log.info("please visit: https://playit.gg/claim/" + claimCode);
                 }
 
                 try {

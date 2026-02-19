@@ -132,7 +132,7 @@ public class PlayitManager implements Runnable {
                 if (code != null) {
                     for (var player : plugin.server.getOnlinePlayers()) {
                         if (player.isOp()) {
-                            player.sendMessage("Visit " + ChatColor.RED + "https://playit.gg/mc/" + code + ChatColor.RESET + " to setup playit");
+                            player.sendMessage("Visit " + ChatColor.RED + "https://playit.gg/claim/" + code + ChatColor.RESET + " to setup playit");
                         } else {
                             player.sendMessage("Check server logs to get playit.gg claim link to setup tunnel (or be a Server Operator)");
                         }
@@ -169,19 +169,19 @@ public class PlayitManager implements Runnable {
                 if (key == null) {
                     log.severe("failed to generate web session key: " + result);
                 } else {
-                var url = "https://playit.gg/login/guest-account/" + key;
-                log.info("setup playit.gg account: " + url);
+                    var url = "https://playit.gg/login/guest-account/" + key;
+                    log.info("setup playit.gg account: " + url);
 
-                if (state.get() == STATE_SHUTDOWN) {
-                    return;
-                }
-
-                for (var player : plugin.server.getOnlinePlayers()) {
-                    if (player.isOp()) {
-                        player.sendMessage("setup playit.gg account");
-                        player.sendMessage(ChatColor.RED + "URL: " + ChatColor.RESET + url);
+                    if (state.get() == STATE_SHUTDOWN) {
+                        return;
                     }
-                }
+
+                    for (var player : plugin.server.getOnlinePlayers()) {
+                        if (player.isOp()) {
+                            player.sendMessage("setup playit.gg account");
+                            player.sendMessage(ChatColor.RED + "URL: " + ChatColor.RESET + url);
+                        }
+                    }
                 }
             } catch (IOException e) {
                 log.severe("failed to generate web session key: " + e);
