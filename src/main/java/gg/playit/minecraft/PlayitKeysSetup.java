@@ -1,16 +1,24 @@
 package gg.playit.minecraft;
 
 import gg.playit.api.ApiClient;
-import gg.playit.api.ApiError;
-import gg.playit.api.actions.CreateTunnel;
-import gg.playit.api.models.AccountTunnel;
-import gg.playit.api.models.Notice;
-import gg.playit.api.models.PortType;
-import gg.playit.api.models.TunnelType;
+import gg.playit.api.ApiClientException;
+import gg.playit.api.model.ApiFail;
+import gg.playit.api.model.ApiResultError;
+import gg.playit.api.model.ApiSuccess;
+import gg.playit.api.model.ApiSuccessNoFail;
+import gg.playit.api.model.enums.AccountStatus;
+import gg.playit.api.model.enums.ClaimAgentType;
+import gg.playit.api.model.enums.ClaimExchangeError;
+import gg.playit.api.model.enums.ClaimSetupError;
+import gg.playit.api.model.enums.ClaimSetupResponse;
+import gg.playit.api.model.request.ReqClaimExchange;
+import gg.playit.api.model.request.ReqClaimSetup;
+import gg.playit.api.model.response.AgentNotice;
+import gg.playit.api.model.response.AgentRunDataV1;
+import gg.playit.api.model.response.AgentSecretKey;
 import gg.playit.minecraft.utils.Hex;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
@@ -26,12 +34,14 @@ public class PlayitKeysSetup {
     public static final int STATE_SHUTDOWN = 0;
     private final ApiClient openClient = new ApiClient(null);
 
-    public PlayitKeysSetup(String secretKey, AtomicInteger state) {
+    public PlayitKeysSetup(String secretKey, AtomicInteger state, String version) {
         keys.secretKey = secretKey;
         this.state = state;
+        this.version = version != null && version.length() > 64 ? version.substring(0, 64) : (version != null ? version : "0.0.0");
     }
 
     private final PlayitKeys keys = new PlayitKeys();
+    private final String version;
     private String claimCode;
 
     public int getState() {
@@ -44,6 +54,10 @@ public class PlayitKeysSetup {
 
     public String getClaimCode() {
         return claimCode;
+    }
+
+    public PlayitKeys getKeys() {
+        return keys;
     }
 
     public PlayitKeys progress() throws IOException {
@@ -64,15 +78,62 @@ public class PlayitKeysSetup {
                     new Random().nextBytes(array);
                     claimCode = Hex.encodeHexString(array);
                     log.info("secret key not set, generate claim code: " + claimCode);
+                    log.info("please visit: https://playit.gg/claim/" + claimCode);
                 }
 
-                log.info("trying to exchange claim code for secret");
-                keys.secretKey = openClient.exchangeClaimForSecret(claimCode);
-
-                if (keys.secretKey == null) {
-                    log.info("failed to exchange, to claim visit: https://playit.gg/mc/" + claimCode);
-                } else {
-                    state.compareAndSet(STATE_MISSING_SECRET, STATE_CHECKING_SECRET);
+                try {
+                    var setupResult = openClient.claimSetup(new ReqClaimSetup(claimCode, ClaimAgentType.SelfManaged, version));
+                    if (setupResult instanceof ApiSuccess<ClaimSetupResponse, ?> success) {
+                        var response = success.data();
+                        switch (response) {
+                            case UserAccepted -> {
+                                log.info("claim accepted, exchanging for secret");
+                                var exchangeResult = openClient.claimExchange(new ReqClaimExchange(claimCode));
+                                if (exchangeResult instanceof ApiSuccess<AgentSecretKey, ?> exchSuccess) {
+                                    keys.secretKey = exchSuccess.data().secret_key();
+                                    state.compareAndSet(STATE_MISSING_SECRET, STATE_CHECKING_SECRET);
+                                } else if (exchangeResult instanceof ApiFail<?, ClaimExchangeError> fail) {
+                                    keys.secretKey = null;
+                                    log.warning("claim exchange failed: " + fail.data() + " - to claim visit: https://playit.gg/claim/" + claimCode);
+                                } else if (exchangeResult instanceof ApiResultError<?, ?> err) {
+                                    keys.secretKey = null;
+                                    log.warning("claim exchange API error: " + err.data() + " - to claim visit: https://playit.gg/claim/" + claimCode);
+                                } else {
+                                    keys.secretKey = null;
+                                    log.warning("claim exchange failed: unexpected result - to claim visit: https://playit.gg/claim/" + claimCode);
+                                }
+                            }
+                            case WaitingForUserVisit, WaitingForUser -> {
+                                keys.secretKey = null;
+                            }
+                            case UserRejected -> {
+                                keys.secretKey = null;
+                                state.compareAndSet(STATE_MISSING_SECRET, STATE_ERROR);
+                                log.warning("claim rejected by user - to claim visit: https://playit.gg/claim/" + claimCode);
+                            }
+                        }
+                    } else if (setupResult instanceof ApiFail<?, ClaimSetupError> fail) {
+                        keys.secretKey = null;
+                        var err = fail.data();
+                        if (err == ClaimSetupError.CodeExpired || err == ClaimSetupError.InvalidCode) {
+                            claimCode = null;
+                            log.warning("claim setup failed: " + err + ", regenerating claim code");
+                        } else {
+                            log.warning("claim setup failed: " + err + " - to claim visit: https://playit.gg/claim/" + claimCode);
+                        }
+                    } else if (setupResult instanceof ApiResultError<?, ?> err) {
+                        keys.secretKey = null;
+                        log.warning("claim setup API error: " + err.data() + " - to claim visit: https://playit.gg/claim/" + claimCode);
+                    } else {
+                        keys.secretKey = null;
+                        log.warning("claim setup failed: unexpected result - to claim visit: https://playit.gg/claim/" + claimCode);
+                    }
+                } catch (ApiClientException e) {
+                    keys.secretKey = null;
+                    String reason = e.getStatusCode() >= 0
+                            ? "HTTP " + e.getStatusCode() + (e.getResponseBody() != null ? ": " + e.getResponseBody() : "")
+                            : e.getMessage();
+                    log.warning("claim setup request failed: " + reason + " - to claim visit: https://playit.gg/claim/" + claimCode);
                 }
 
                 return null;
@@ -82,17 +143,21 @@ public class PlayitKeysSetup {
 
                 var api = new ApiClient(keys.secretKey);
                 try {
-                    var status = api.getStatus();
+                    var rundata = api.v1AgentsRundata();
+                    if (!(rundata instanceof ApiSuccessNoFail<AgentRunDataV1> success)) {
+                        throw new IOException("agents rundata failed: " + rundata);
+                    }
+                    var data = success.data();
 
-                    keys.isGuest = status.isGuest;
-                    keys.isEmailVerified = status.emailVerified;
-                    keys.agentId = status.agentId;
-                    keys.notice = status.notice;
+                    keys.isGuest = data.permissions().account_status() == AccountStatus.Guest;
+                    keys.isEmailVerified = data.permissions().account_status() != AccountStatus.EmailNotVerified;
+                    keys.agentId = data.agent_id();
+                    keys.notice = data.notices() != null && !data.notices().isEmpty() ? data.notices().get(0) : null;
 
-                    state.compareAndSet(STATE_CHECKING_SECRET, STATE_CREATING_TUNNEL);
-                    return null;
-                } catch (ApiError e) {
-                    if (e.statusCode == 401 || e.statusCode == 400) {
+                    log.info("secret verified, ready to connect");
+                    return keys;
+                } catch (ApiClientException e) {
+                    if (e.getStatusCode() == 401 || e.getStatusCode() == 400) {
                         if (claimCode == null) {
                             log.info("secret key invalid, starting over");
                             state.compareAndSet(STATE_CHECKING_SECRET, STATE_MISSING_SECRET);
@@ -104,35 +169,8 @@ public class PlayitKeysSetup {
                         return null;
                     }
 
-                    throw e;
+                    throw new IOException("API error", e);
                 }
-            }
-            case STATE_CREATING_TUNNEL -> {
-                var api = new ApiClient(keys.secretKey);
-
-                var tunnels = api.listTunnels();
-                keys.tunnelAddress = null;
-
-                for (AccountTunnel tunnel : tunnels.tunnels) {
-                    if (tunnel.tunnelType == TunnelType.MinecraftJava) {
-                        keys.tunnelAddress = tunnel.displayAddress;
-                        log.info("found minecraft java tunnel: " + keys.tunnelAddress);
-                        return keys;
-                    }
-                }
-
-                log.info("create new minecraft java tunnel");
-
-                var create = new CreateTunnel();
-                create.localIp = "127.0.0.1";
-                create.portCount = 1;
-                create.portType = PortType.TCP;
-                create.tunnelType = TunnelType.MinecraftJava;
-                create.agentId = keys.agentId;
-
-                api.createTunnel(create);
-
-                return null;
             }
             default -> {
                 return null;
@@ -146,6 +184,6 @@ public class PlayitKeysSetup {
         public String tunnelAddress;
         public boolean isGuest;
         public boolean isEmailVerified;
-        public Notice notice;
+        public AgentNotice notice;
     }
 }

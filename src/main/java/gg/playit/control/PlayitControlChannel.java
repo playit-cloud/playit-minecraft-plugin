@@ -1,6 +1,7 @@
 package gg.playit.control;
 
 import gg.playit.api.ApiClient;
+import gg.playit.api.model.request.AgentVersion;
 import gg.playit.messages.ControlFeedReader;
 import gg.playit.messages.ControlRequestWriter;
 import gg.playit.messages.DecodeException;
@@ -18,14 +19,13 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.logging.Logger;
 
-import static gg.playit.control.ChannelSetup.CONTROL_PORT;
-
 public class PlayitControlChannel implements Closeable {
     static Logger log = Logger.getLogger(ChannelSetup.class.getName());
 
     ApiClient apiClient;
     DatagramSocket socket;
     InetAddress controlAddress;
+    int controlPort;
     ControlFeedReader.Pong ogPong;
     ControlFeedReader.Pong latestPong;
     ControlFeedReader.AgentRegistered registered;
@@ -35,10 +35,16 @@ public class PlayitControlChannel implements Closeable {
     private long lastKeepAlive;
     private long lastPing;
 
-    public static PlayitControlChannel setup(String secretKey) throws IOException {
+    /**
+     * Set up an authenticated control channel.
+     *
+     * @param secretKey    the agent secret key
+     * @param agentVersion the agent version for proto register, or null to use the default
+     */
+    public static PlayitControlChannel setup(String secretKey, AgentVersion agentVersion) throws IOException {
         try {
             return ChannelSetup
-                    .start()
+                    .start(secretKey, agentVersion)
                     .findChannel()
                     .authenticate(secretKey);
         } catch (DecodeException | BufferUnderflowException error) {
@@ -50,7 +56,8 @@ public class PlayitControlChannel implements Closeable {
         try {
             var now = Instant.now().toEpochMilli();
 
-            if (now - lastPing > 5_000) {
+            /* Ping every 1s per protocol v2 */
+            if (now - lastPing > 1_000) {
                 lastPing = now;
                 this.sendPing(now);
             }
@@ -73,7 +80,7 @@ public class PlayitControlChannel implements Closeable {
                 return Optional.empty();
             }
 
-            if (!Arrays.equals(rxPacket.getAddress().getAddress(), this.controlAddress.getAddress()) || rxPacket.getPort() != CONTROL_PORT) {
+            if (!Arrays.equals(rxPacket.getAddress().getAddress(), this.controlAddress.getAddress()) || rxPacket.getPort() != controlPort) {
                 log.warning("got packet from unexpected source: " + rxPacket.getAddress() + ", port: " + rxPacket.getPort());
                 return Optional.empty();
             }
@@ -104,7 +111,7 @@ public class PlayitControlChannel implements Closeable {
 
     private void sendPing(long now) throws IOException {
         sendBuffer.clear();
-        ControlRequestWriter.requestId(sendBuffer, 100).ping(now, this.registered.id);
+        ControlRequestWriter.requestId(sendBuffer, 200).ping(now, this.registered.id);
         this.sendPacket();
     }
 
@@ -117,7 +124,7 @@ public class PlayitControlChannel implements Closeable {
     private void sendPacket() throws IOException {
         DatagramPacket p = new DatagramPacket(sendBuffer.array(), sendBuffer.arrayOffset(), sendBuffer.position());
         p.setAddress(this.controlAddress);
-        p.setPort(CONTROL_PORT);
+        p.setPort(controlPort);
         this.socket.send(p);
     }
 
