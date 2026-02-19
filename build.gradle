@@ -91,6 +91,9 @@ shadowJar {
     archiveBaseName.set('playit-minecraft-plugin')
     archiveClassifier.set('')
     archiveVersion.set(project.version as String)
+
+    exclude('META-INF/LICENSE*')
+    exclude('META-INF/NOTICE*')
 }
 
 build.dependsOn shadowJar

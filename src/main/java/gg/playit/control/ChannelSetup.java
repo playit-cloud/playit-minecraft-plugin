@@ -26,12 +26,6 @@ import java.util.logging.Logger;
 public class ChannelSetup {
     public static final int CONTROL_PORT = 5525;
 
-    /** Default Minecraft plugin variant ID (UUID) */
-    private static final String PLUGIN_VARIANT_ID = "308943e8-faef-4835-a2ba-270351f72aa3";
-
-    /** Default agent version when none is provided (0.1.4) */
-    public static final AgentVersion DEFAULT_AGENT_VERSION = new AgentVersion(PLUGIN_VARIANT_ID, 0, 1, 4);
-
     static Logger log = Logger.getLogger(ChannelSetup.class.getName());
 
     /**
@@ -84,7 +78,7 @@ public class ChannelSetup {
         var setup = new FindSuitableChannel();
         setup.options = addresses.toArray(new InetSocketAddress[0]);
         setup.apiClient = apiClient;
-        setup.agentVersion = agentVersion != null ? agentVersion : DEFAULT_AGENT_VERSION;
+        setup.agentVersion = agentVersion;
         return setup;
     }
 

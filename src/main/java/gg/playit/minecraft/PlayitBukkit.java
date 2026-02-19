@@ -29,6 +29,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
 
     private final Object managerSync = new Object();
     private volatile PlayitManager playitManager;
+    private volatile PlayitPipelineInjector pipelineInjector;
 
     Server server;
 
@@ -55,6 +56,15 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
             pm.registerEvents(this, this);
         } catch (Exception e) {
         }
+
+        Bukkit.getScheduler().runTaskLater(this, () -> {
+            try {
+                pipelineInjector = PlayitPipelineInjector.inject(server);
+                log.info("playit header decoder injected into server pipeline");
+            } catch (Exception e) {
+                log.warning("failed to inject playit header decoder into server pipeline: " + e);
+            }
+        }, 1L);
     }
 
     @EventHandler
@@ -332,6 +342,10 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        if (pipelineInjector != null) {
+            pipelineInjector.remove();
+            pipelineInjector = null;
+        }
         if (playitManager != null) {
             playitManager.shutdown();
             playitManager = null;
