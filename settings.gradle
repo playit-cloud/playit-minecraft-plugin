@@ -1,1 +1,10 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven {
+            url = 'https://repo.screamingsandals.org/public'
+        }
+    }
+}
+
 rootProject.name = 'playit-minecraft-java-plugin'
