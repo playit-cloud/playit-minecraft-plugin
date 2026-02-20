@@ -192,7 +192,7 @@ public class ApiClient {
             String responseBody = response.body();
 
             if (response.statusCode() != 200) {
-                throw new ApiClientException(response.statusCode(), bodyStr, responseBody);
+                throw new ApiClientException(response.statusCode(), path, bodyStr, responseBody);
             }
 
             return mapper.readValue(responseBody, typeRef);
