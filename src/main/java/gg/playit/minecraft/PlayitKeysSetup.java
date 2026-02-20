@@ -169,7 +169,7 @@ public class PlayitKeysSetup {
                         return null;
                     }
 
-                    throw new IOException("API error", e);
+                    throw new IOException("API error: " + e.getMessage(), e);
                 }
             }
             default -> {
