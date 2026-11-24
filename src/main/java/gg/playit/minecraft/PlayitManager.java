@@ -82,8 +82,9 @@ public class PlayitManager implements Runnable {
     public static final int STATE_SHUTDOWN = 0;
     public static final int STATE_INVALID_AUTH = 15;
 
+    /* Stops run() from any state. A manager left running after a restart or reload keeps reconnecting forever. */
     public void shutdown() {
-        state.compareAndSet(STATE_ONLINE, STATE_SHUTDOWN);
+        state.set(STATE_SHUTDOWN);
     }
 
     public int state() {
@@ -190,11 +191,10 @@ public class PlayitManager implements Runnable {
             plugin.broadcast(ChatColor.RED + "WARNING: " + ChatColor.RESET + "email associated with playit.gg account is not verified");
         }
 
-        if (state.get() == STATE_SHUTDOWN) {
+        var setupState = state.get();
+        if (setupState == STATE_SHUTDOWN || !state.compareAndSet(setupState, STATE_CONNECTING)) {
             return;
         }
-
-        state.set(STATE_CONNECTING);
 
         while (state.get() == STATE_CONNECTING) {
             try (PlayitControlChannel channel = PlayitControlChannel.setup(keys.secretKey, PlayitConstants.MINECRAFT_AGENT_VERSION)) {
